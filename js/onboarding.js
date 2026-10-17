@@ -1,6 +1,5 @@
 // ============================================================================
 // ФАЙЛ: js/onboarding.js
-// Модуль онбординга с исправленным переходом после сохранения профиля
 // ============================================================================
 
 const ONBOARDING_I18N = {
@@ -159,8 +158,8 @@ const OnboardingModule = {
     this.render();
   },
 
-  // Жесткое сохранение онбординга и немедленный переход в Главное меню
-  finishOnboarding() {
+  // Асинхронное сохранение с гарантией записи в Supabase
+  async finishOnboarding() {
     const nameInput = document.getElementById("onb-name-input");
     const emailInput = document.getElementById("onb-email-input");
     if (nameInput && nameInput.value.trim()) {
@@ -174,13 +173,14 @@ const OnboardingModule = {
     AppState.data.activeTab = "today";
     AppState.save();
 
+    showToast("💾 Сохранение в облако...");
+
     if (window.AuthModule && window.AuthModule.saveProgressToCloud) {
-      window.AuthModule.saveProgressToCloud();
+      await window.AuthModule.saveProgressToCloud(); // Ждем завершения записи в БД
     }
 
     showToast("✓ Профиль сохранен!");
 
-    // Сразу принудительно переключаем на главный экран
     if (window.renderCurrentModule) {
       window.renderCurrentModule();
     } else {
