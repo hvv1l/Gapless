@@ -28,14 +28,14 @@
 
   <div class="w-full max-w-md min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl relative overflow-x-hidden border-x border-slate-200/70 dark:border-slate-800/80">
 
-    <!-- Верхняя шапка -->
+    <!-- Верхняя шапка (клик по логотипу G возвращает на Главное меню) -->
     <header class="sticky top-0 z-30 backdrop-blur-md bg-white/85 dark:bg-slate-900/85 border-b border-slate-200 dark:border-slate-800 px-5 py-3.5 flex items-center justify-between">
-      <div class="flex items-center gap-2.5">
+      <button onclick="goHomeMenu()" class="flex items-center gap-2.5 text-left hover:opacity-80 transition" title="На главное меню">
         <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-ocean-500 to-mint-500 flex items-center justify-center text-white font-extrabold text-base shadow-sm">
           G
         </div>
         <span class="font-extrabold tracking-tight text-base">Gapless</span>
-      </div>
+      </button>
 
       <button onclick="AppState.toggleTheme()" id="header-theme-btn"
         class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm hover:opacity-80 transition">
@@ -74,10 +74,32 @@
   <script src="js/chat.js"></script>
 
   <script>
+    // Нажатие на логотип G в шапке -> всегда переносит на Главное меню ("Сегодня")
+    function goHomeMenu() {
+      if (!AppState.data.isAuthenticated) {
+        AuthUI.renderAuthScreen();
+        return;
+      }
+      if (!AppState.data.onboardingCompleted) {
+        OnboardingModule.goToStep(1);
+        return;
+      }
+      AppState.data.activeTab = "today";
+      if (window.DashboardModule) {
+        DashboardModule.dailyState = "idle";
+        DashboardModule.activeExercise = null;
+      }
+      AppState.save();
+      renderCurrentModule();
+    }
+
     function switchAppTab(tabId) {
       AppState.data.activeTab = tabId;
       if (window.DashboardModule && tabId === 'exercises') {
         DashboardModule.activeExercise = null;
+      }
+      if (tabId === 'chat' && window.ChatModule) {
+        ChatModule.ensureConnected();
       }
       AppState.save();
       renderCurrentModule();
@@ -86,7 +108,7 @@
     function updateBottomNav() {
       const nav = document.getElementById("bottom-nav");
       const isUk = AppState.data.nativeLang === "uk";
-      if (!AppState.data.onboardingCompleted) {
+      if (!AppState.data.isAuthenticated || !AppState.data.onboardingCompleted) {
         nav.classList.add("hidden");
         return;
       }
@@ -110,32 +132,44 @@
     }
 
     async function renderCurrentModule() {
-      updateBottomNav();
-      
-      // Проверка сессии Supabase (если клиент инициализирован)
+      // 1. Сначала проверяем, вошел ли пользователь в аккаунт
       if (window.supabaseClient) {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session) {
-          const nav = document.getElementById("bottom-nav");
-          if (nav) nav.classList.add("hidden");
-          AuthUI.renderAuthScreen();
-          return;
-        }
+        try {
+          const { data: { session } } = await window.supabaseClient.auth.getSession();
+          if (session && session.user) {
+            AppState.data.isAuthenticated = true;
+          }
+        } catch (e) {}
       }
 
+      if (!AppState.data.isAuthenticated) {
+        updateBottomNav();
+        AuthUI.renderAuthScreen();
+        return;
+      }
+
+      // 2. Если вошел, но еще не прошел калибровку слов (Онбординг)
       if (!AppState.data.onboardingCompleted) {
+        updateBottomNav();
         OnboardingModule.render();
+        return;
+      }
+
+      // 3. Иначе показываем выбранную вкладку (по умолчанию — главное меню "Сегодня")
+      updateBottomNav();
+      const tab = AppState.data.activeTab || "today";
+      if (tab === "chat") {
+        ChatModule.render();
       } else {
-        const tab = AppState.data.activeTab || "today";
-        if (tab === "chat") {
-          ChatModule.render();
-        } else {
-          DashboardModule.render();
-        }
+        DashboardModule.render();
       }
     }
 
     AppState.init();
+    // Принудительно ставим вкладку "Сегодня" при открытии сайта
+    if (AppState.data.activeTab === "chat") {
+      AppState.data.activeTab = "today";
+    }
     renderCurrentModule();
   </script>
 </body>
