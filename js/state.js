@@ -1,27 +1,25 @@
 // ============================================================================
 // ФАЙЛ: js/state.js
-// Управление состоянием профиля, темой оформления и навигацией между модулями
 // ============================================================================
 
 const AppState = {
-  storageKey: "gapless_app_settings_v1",
+  storageKey: "gapless_app_settings_v2",
 
-  // Настройки по умолчанию
   data: {
+    isAuthenticated: false,
     onboardingCompleted: false,
-    onboardingStep: 1,         // 1: Приветствие, 2: Уровень, 3: Фильтр БД, 4: Финал
-    nativeLang: "ru",          // 'ru' | 'uk'
-    theme: "dark",             // 'dark' | 'light'
-    selectedLevel: "B1",       // Стартовый ориентир (A0..C1)
-    filterMode: "clusters",    // 'clusters' (пачками) | 'single' (по одному)
-    categoryFilter: "all",     // Фильтр по смысловой теме ('all', 'family', 'food'...)
-    showTranslation: false,    // Показывать ли перевод прямо на плашках
-    showTranscription: false,  // Показывать ли транскрипцию
+    onboardingStep: 1,
+    nativeLang: "ru",
+    theme: "dark",
+    selectedLevel: "B1",
+    filterMode: "clusters",
+    categoryFilter: "all",
+    showTranslation: false,
+    showTranscription: false,
     userName: "",
     userEmail: "",
-    activeTab: "today",        // Вкладка нижнего меню ('today', 'base', 'chat', 'profile')
-    xp: 120,
-    streakDays: 3
+    activeTab: "today",
+    friendsList: []
   },
 
   init() {
@@ -30,9 +28,7 @@ const AppState = {
       if (saved) {
         this.data = { ...this.data, ...JSON.parse(saved) };
       }
-    } catch (e) {
-      console.warn("Настройки по умолчанию");
-    }
+    } catch (e) {}
     this.applyTheme();
   },
 
@@ -40,15 +36,15 @@ const AppState = {
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(this.data));
     } catch (e) {}
+    if (window.AuthModule && window.AuthModule.saveProgressToCloud) {
+      window.AuthModule.saveProgressToCloud();
+    }
   },
 
   applyTheme() {
     const html = document.documentElement;
-    if (this.data.theme === "dark") {
-      html.classList.add("dark");
-    } else {
-      html.classList.remove("dark");
-    }
+    if (this.data.theme === "dark") html.classList.add("dark");
+    else html.classList.remove("dark");
     const btn = document.getElementById("header-theme-btn");
     if (btn) btn.textContent = this.data.theme === "dark" ? "🌙" : "☀️";
   },
@@ -61,7 +57,6 @@ const AppState = {
   }
 };
 
-// Глобальное всплывающее уведомление (Тост)
 function showToast(message) {
   const toast = document.getElementById("app-toast");
   if (!toast) return;
