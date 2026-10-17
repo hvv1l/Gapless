@@ -1,6 +1,6 @@
 // ============================================================================
 // ФАЙЛ: js/auth.js
-// Модуль авторизации с поддержкой подтверждения Email через Supabase
+// Авторизация + Двусторонняя синхронизация прогресса с аккаунтом в Supabase
 // ============================================================================
 
 // 🔑 ВСТАВЬ СВОЙ URL И ANON KEY ИЗ SUPABASE PROJECT SETTINGS:
@@ -24,12 +24,14 @@ try {
 }
 
 const AuthModule = {
-  // Слушатель перехода по ссылке из письма подтверждения
+  currentUserId: null,
+  _syncTimer: null,
+
   initAuthListener() {
     if (!window.supabaseClient) return;
 
     window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
-      if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session && session.user) {
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "USER_UPDATED") && session && session.user) {
         await this.syncProfileFromSession(session.user);
         if (window.AuthUI) window.AuthUI.pendingConfirmationEmail = null;
         if (window.renderCurrentModule) window.renderCurrentModule();
@@ -37,7 +39,9 @@ const AuthModule = {
     });
   },
 
+  // Подтягиваем уровень, язык и все отмеченные слова из аккаунта в облаке
   async syncProfileFromSession(user) {
+    this.currentUserId = user.id;
     const fallbackName = (user.user_metadata && user.user_metadata.username) || user.email.split("@")[0];
     let username = fallbackName;
 
@@ -49,9 +53,21 @@ const AuthModule = {
           .eq("id", user.id)
           .single();
 
-        if (profile && profile.username) {
-          username = profile.username;
+        if (profile) {
+          if (profile.username) username = profile.username;
           if (profile.level) AppState.data.selectedLevel = profile.level;
+          if (profile.native_lang) AppState.data.nativeLang = profile.native_lang;
+          if (typeof profile.onboarding_completed === "boolean") {
+            AppState.data.onboardingCompleted = profile.onboarding_completed;
+          }
+
+          // Если в облаке уже есть сохраненные слова — загружаем их на устройство!
+          if (profile.word_status && Object.keys(profile.word_status).length > 0) {
+            GaplessDB.setCloudWordStatus(profile.word_status);
+          } else if (Object.keys(GaplessDB.userWordStatus).length > 0) {
+            // Если в облаке пусто, а на устройстве уже что-то было — выгружаем в облако
+            this.saveProgressToCloud();
+          }
         }
       } catch (e) {}
     }
@@ -62,19 +78,39 @@ const AuthModule = {
     AppState.save();
   },
 
-  // Регистрация с отправкой письма на почту
+  // Сохранить текущие слова, уровень и статус онбординга в облачный аккаунт
+  saveProgressToCloud() {
+    if (!window.supabaseClient || !this.currentUserId) return;
+
+    clearTimeout(this._syncTimer);
+    this._syncTimer = setTimeout(async () => {
+      try {
+        await window.supabaseClient
+          .from("profiles")
+          .update({
+            level: AppState.data.selectedLevel || "B1",
+            native_lang: AppState.data.nativeLang || "ru",
+            onboarding_completed: !!AppState.data.onboardingCompleted,
+            word_status: GaplessDB.userWordStatus || {},
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", this.currentUserId);
+      } catch (e) {
+        console.warn("Не удалось синхронизировать прогресс с облаком:", e);
+      }
+    }, 350);
+  },
+
   async signUp(email, password, username) {
     const cleanEmail = email.toLowerCase().trim();
 
     if (!window.supabaseClient) {
-      showToast("Вставь ключи Supabase в js/auth.js для отправки писем");
+      showToast("Вставь ключи Supabase в js/auth.js");
       return { status: "error" };
     }
 
     try {
-      // Чистый URL нашего сайта для возврата из письма
       const redirectUrl = window.location.origin + window.location.pathname;
-
       const { data, error } = await window.supabaseClient.auth.signUp({
         email: cleanEmail,
         password: password,
@@ -92,14 +128,13 @@ const AuthModule = {
         return { status: "error" };
       }
 
-      // Если в Supabase включено подтверждение почты — user создается, но session === null
       if (data && data.user && !data.session) {
         showToast("📩 Письмо отправлено на " + cleanEmail);
         return { status: "confirm_email", email: cleanEmail };
       }
 
-      // Если подтверждение выключено и пустило сразу
       if (data && data.session) {
+        GaplessDB.clearLocalStatus();
         await this.syncProfileFromSession(data.user);
         showToast("✓ Аккаунт создан!");
         return { status: "ok" };
@@ -112,7 +147,6 @@ const AuthModule = {
     }
   },
 
-  // Повторная отправка письма подтверждения
   async resendConfirmation(email) {
     if (!window.supabaseClient || !email) return;
     try {
@@ -122,17 +156,11 @@ const AuthModule = {
         email: email,
         options: { emailRedirectTo: redirectUrl }
       });
-      if (error) {
-        showToast("Подожди минуту перед повторной отправкой");
-      } else {
-        showToast("📩 Письмо отправлено повторно!");
-      }
-    } catch (e) {
-      showToast("Ошибка при повторной отправке");
-    }
+      if (error) showToast("Подожди минуту перед повторной отправкой");
+      else showToast("📩 Письмо отправлено повторно!");
+    } catch (e) {}
   },
 
-  // Вход по Email и паролю (пускает только после подтверждения почты)
   async signIn(email, password) {
     const cleanEmail = email.toLowerCase().trim();
 
@@ -157,8 +185,9 @@ const AuthModule = {
       }
 
       if (data && data.user) {
+        GaplessDB.clearLocalStatus();
         await this.syncProfileFromSession(data.user);
-        showToast("✓ Вход выполнен!");
+        showToast("✓ Вход выполнен! Прогресс синхронизирован");
         return true;
       }
     } catch (e) {
@@ -171,7 +200,12 @@ const AuthModule = {
     if (window.supabaseClient) {
       try { await window.supabaseClient.auth.signOut(); } catch (e) {}
     }
+    this.currentUserId = null;
+    GaplessDB.clearLocalStatus();
     AppState.data.isAuthenticated = false;
+    AppState.data.onboardingCompleted = false;
+    AppState.data.userName = "";
+    AppState.data.userEmail = "";
     AppState.data.activeTab = "today";
     AppState.save();
     showToast("Вы вышли из аккаунта");
