@@ -1,10 +1,10 @@
 // ============================================================================
 // ФАЙЛ: js/chat.js
-// Модуль 3: Чат (AI-напарник, Онлайн-поиск, Друзья и кликабельный переводчик)
+// Онлайн-чат (Supabase Realtime + AI + друзья)
 // ============================================================================
 
 const ChatModule = {
-  activeSubTab: "ai",      // 'ai' | 'random' | 'friends'
+  activeSubTab: "ai", // 'ai' | 'random' | 'friends'
   roomId: "global_random",
   missionWord: "inevitable",
   missionDone: false,
@@ -12,11 +12,18 @@ const ChatModule = {
     { sender_name: "Liam (AI)", text: "Hi! How was your day? Try using the word 'inevitable' in our conversation!" }
   ],
   subscription: null,
+  isConnected: false,
+
+  ensureConnected() {
+    if (!this.isConnected && this.activeSubTab === "random") {
+      this.initRealtimeChat();
+    }
+  },
 
   setSubTab(tab) {
     this.activeSubTab = tab;
     if (this.subscription) {
-      try { this.subscription.unsubscribe(); } catch (e) {}
+      try { this.subscription.unsubscribe(); } catch(e) {}
       this.subscription = null;
     }
 
@@ -33,11 +40,12 @@ const ChatModule = {
   },
 
   async initRealtimeChat() {
+    this.isConnected = true;
     const isUk = AppState.data.nativeLang === "uk";
 
     if (!window.supabaseClient) {
       this.messages = [
-        { sender_name: "Sarah (London)", text: "Hey there! I just joined the random practice chat. What's your favorite movie?" }
+        { sender_name: "Sarah (London)", text: "Hey! This is a demo mode chat. Configure Supabase in js/auth.js for live global chat." }
       ];
       this.render();
       return;
@@ -54,14 +62,22 @@ const ChatModule = {
 
       if (!error && data && data.length > 0) {
         this.messages = data;
-      } else {
-        this.messages = [
-          { sender_name: "System", text: "Welcome to the live room! Say hello to start practicing." }
-        ];
       }
     } catch (e) {}
 
     this.render();
+
+    this.subscription = window.supabaseClient
+      .channel(`room_${this.roomId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${this.roomId}` }, (payload) => {
+        this.messages.push(payload.new);
+        if (AppState.data.activeTab === "chat") {
+          this.render();
+          const box = document.getElementById("chat-messages-box");
+          if (box) box.scrollTop = box.scrollHeight;
+        }
+      })
+      .subscribe();
   },
 
   async sendMessage() {
@@ -74,41 +90,28 @@ const ChatModule = {
     const isUk = AppState.data.nativeLang === "uk";
     const myName = AppState.data.userName || (isUk ? "Користувач" : "Пользователь");
 
-    // Проверка выполнения миссии
     if (this.missionWord && text.toLowerCase().includes(this.missionWord.toLowerCase())) {
       this.missionDone = true;
       showToast(isUk ? `✓ Місію виконано: ${this.missionWord}` : `✓ Миссия выполнена: ${this.missionWord}`);
     }
 
-    this.messages.push({ sender_name: myName, text: text });
-    this.render();
-
-    if (this.activeSubTab === "random" && window.supabaseClient) {
-      try {
-        await window.supabaseClient.from("messages").insert([
-          { room_id: this.roomId, sender_name: myName, text: text }
-        ]);
-      } catch (e) {}
+    if (this.activeSubTab === "ai" || !window.supabaseClient) {
+      this.messages.push({ sender_name: myName, text });
+      this.render();
+      setTimeout(() => {
+        this.messages.push({ sender_name: "Liam (AI)", text: "That's a great point! Tell me more about it." });
+        if (AppState.data.activeTab === "chat") this.render();
+      }, 700);
       return;
     }
 
-    // Ответ собеседника
-    setTimeout(() => {
-      const partnerName = this.activeSubTab === "ai" ? "Liam (AI)" : "Sarah (London)";
-      let reply = "That sounds really interesting! Why do you think so?";
-      const lower = text.toLowerCase();
-      if (lower.includes("movie") || lower.includes("film")) {
-        reply = "I love good comedies and sci-fi movies! Which genre do you prefer?";
-      } else if (lower.includes("inevitable")) {
-        reply = "Nice use of the word 'inevitable'! Your vocabulary is getting stronger.";
-      }
-      this.messages.push({ sender_name: partnerName, text: reply });
-      if (AppState.data.activeTab === "chat") {
-        this.render();
-        const box = document.getElementById("chat-messages-box");
-        if (box) box.scrollTop = box.scrollHeight;
-      }
-    }, 800);
+    try {
+      await window.supabaseClient.from("messages").insert([
+        { room_id: this.roomId, sender_name: myName, text }
+      ]);
+    } catch (e) {
+      showToast("Ошибка отправки");
+    }
   },
 
   addFriendByNickname() {
@@ -138,7 +141,7 @@ const ChatModule = {
     modal.innerHTML = `
       <div class="p-3.5 rounded-2xl bg-slate-900 text-white border border-slate-700 shadow-xl flex items-center justify-between fade-in">
         <div class="flex items-center gap-3">
-          <button onclick="GaplessDB.wordsMap.get('${wordModel.en.toLowerCase()}').speak()" class="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center text-xs font-bold">🔊</button>
+          <button onclick="GaplessDB.wordsMap.get('${wordModel.en.toLowerCase()}').speak()" class="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center text-xs">🔊</button>
           <div>
             <div class="text-sm font-extrabold text-ocean-400">${wordModel.en}</div>
             <div class="text-xs text-slate-300">${wordModel.getTranslation(lang)}</div>
@@ -157,7 +160,7 @@ const ChatModule = {
   addWordFromChatToGaps(wordEn) {
     GaplessDB.setWordStatus(wordEn, "gap");
     const isUk = AppState.data.nativeLang === "uk";
-    showToast(isUk ? `+ «${wordEn}» додано у твої прогалини` : `+ «${wordEn}» добавлено в твои пробелы`);
+    showToast(isUk ? `+ «${wordEn}» додано у твої прогалини` : `+ «${wordEn}» добавлено в пробелы`);
     const modal = document.getElementById("word-inspect-modal");
     if (modal) modal.innerHTML = "";
   },
@@ -168,18 +171,16 @@ const ChatModule = {
     const isUk = AppState.data.nativeLang === "uk";
     const myName = AppState.data.userName || (isUk ? "Користувач" : "Пользователь");
 
-    // Верхние вкладки внутри Чата
     const topTabsHtml = `
       <div class="p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0">
         <div class="grid grid-cols-3 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
           <button onclick="ChatModule.setSubTab('ai')" class="py-1.5 rounded-lg transition ${this.activeSubTab === 'ai' ? 'bg-white dark:bg-slate-900 text-ocean-500 shadow-sm' : 'text-slate-500'}">AI Напарник</button>
-          <button onclick="ChatModule.setSubTab('random')" class="py-1.5 rounded-lg transition ${this.activeSubTab === 'random' ? 'bg-white dark:bg-slate-900 text-ocean-500 shadow-sm' : 'text-slate-500'}">${isUk ? 'Випадковий' : 'Случайный'}</button>
+          <button onclick="ChatModule.setSubTab('random')" class="py-1.5 rounded-lg transition ${this.activeSubTab === 'random' ? 'bg-white dark:bg-slate-900 text-ocean-500 shadow-sm' : 'text-slate-500'}">${isUk ? 'Онлайн чат' : 'Онлайн чат'}</button>
           <button onclick="ChatModule.setSubTab('friends')" class="py-1.5 rounded-lg transition ${this.activeSubTab === 'friends' ? 'bg-white dark:bg-slate-900 text-ocean-500 shadow-sm' : 'text-slate-500'}">${isUk ? 'Друзі' : 'Друзья'}</button>
         </div>
       </div>
     `;
 
-    // Экран списка и добавления друзей
     if (this.activeSubTab === "friends") {
       const friends = AppState.data.friendsList || [];
       container.innerHTML = `
@@ -199,16 +200,14 @@ const ChatModule = {
             ${friends.length === 0 ? `
               <div class="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-1">
                 <div class="text-sm font-bold">${isUk ? 'Поки що немає друзів' : 'Список друзей пока пуст'}</div>
-                <p class="text-xs text-slate-400">${isUk ? 'Додай друга за нікнеймом вище, щоб спілкуватися разом.' : 'Введи никнейм друга выше, чтобы тренироваться вместе.'}</p>
+                <p class="text-xs text-slate-400">${isUk ? 'Додай друга за нікнеймом вище.' : 'Введи никнейм друга выше.'}</p>
               </div>
             ` : `
               <div class="space-y-2">
                 ${friends.map(f => `
                   <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                     <span class="text-sm font-bold">${f}</span>
-                    <button onclick="ChatModule.setSubTab('random')" class="px-3 py-1.5 rounded-xl bg-ocean-500/15 text-ocean-500 text-xs font-bold">
-                      ${isUk ? 'Написати' : 'Написать'}
-                    </button>
+                    <button onclick="ChatModule.setSubTab('random')" class="px-3 py-1.5 rounded-xl bg-ocean-500/15 text-ocean-500 text-xs font-bold">${isUk ? 'Написати' : 'Написать'}</button>
                   </div>
                 `).join("")}
               </div>
@@ -253,7 +252,6 @@ const ChatModule = {
       <div class="flex flex-col h-[calc(100vh-130px)] fade-in relative">
         ${topTabsHtml}
 
-        <!-- Плашка задания на диалог -->
         <div class="px-4 py-2 bg-ocean-500/10 border-b border-ocean-500/20 flex items-center justify-between text-xs shrink-0">
           <div>
             <span class="text-slate-500 dark:text-slate-400 font-semibold">${isUk ? 'Завдання:' : 'Задание:'}</span>
@@ -264,15 +262,12 @@ const ChatModule = {
           </span>
         </div>
 
-        <!-- Список сообщений -->
         <div id="chat-messages-box" class="flex-1 overflow-y-auto p-4 space-y-2">
           ${messagesHtml}
         </div>
 
-        <!-- Всплывающее окно перевода при клике на слово -->
         <div id="word-inspect-modal" class="px-3 absolute bottom-16 left-0 right-0 z-20"></div>
 
-        <!-- Поле ввода -->
         <div class="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 shrink-0">
           <input id="chat-input-field" type="text" placeholder="${isUk ? 'Напиши повідомлення англійською...' : 'Напиши сообщение на английском...'}" 
             onkeydown="if(event.key==='Enter') ChatModule.sendMessage()"
