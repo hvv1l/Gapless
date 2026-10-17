@@ -22,7 +22,7 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center transition-colors duration-300">
 
@@ -68,124 +68,16 @@
 
   </div>
 
-  <!-- ПОДКЛЮЧЕНИЕ ВСЕХ МОДУЛЕЙ С ВЕРСИЕЙ ?v=3 (ДЛЯ СБРОСА СТАРОГО КЭША) -->
-  <script src="data/vocabulary.js?v=3"></script>
-  <script src="js/db-service.js?v=3"></script>
-  <script src="js/state.js?v=3"></script>
-  <script src="js/auth.js?v=3"></script>
-  <script src="js/auth-ui.js?v=3"></script>
-  <script src="js/onboarding.js?v=3"></script>
-  <script src="js/dashboard.js?v=3"></script>
-  <script src="js/chat.js?v=3"></script>
+  <!-- ПОДКЛЮЧЕНИЕ ВСЕХ МОДУЛЕЙ С ВЕРСИЕЙ ?v=5 (СБРОС СТАРОГО КЭША) -->
+  <script src="data/vocabulary.js?v=5"></script>
+  <script src="js/db-service.js?v=5"></script>
+  <script src="js/state.js?v=5"></script>
+  <script src="js/auth.js?v=5"></script>
+  <script src="js/auth-ui.js?v=5"></script>
+  <script src="js/onboarding.js?v=5"></script>
+  <script src="js/dashboard.js?v=5"></script>
+  <script src="js/chat.js?v=5"></script>
 
-  <script>
-    // Нажатие на логотип G в шапке -> переносит на Главное меню ("Сегодня")
-    function goHomeMenu() {
-      if (!AppState.data.isAuthenticated) {
-        AuthUI.renderAuthScreen();
-        return;
-      }
-      if (!AppState.data.onboardingCompleted) {
-        OnboardingModule.goToStep(1);
-        return;
-      }
-      AppState.data.activeTab = "today";
-      if (window.DashboardModule) {
-        DashboardModule.dailyState = "idle";
-        DashboardModule.activeExercise = null;
-      }
-      AppState.save();
-      renderCurrentModule();
-    }
-
-    // Переключение между 4 вкладками нижнего меню
-    function switchAppTab(tabId) {
-      AppState.data.activeTab = tabId;
-      if (window.DashboardModule && tabId === 'exercises') {
-        DashboardModule.activeExercise = null;
-      }
-      AppState.save();
-      renderCurrentModule();
-    }
-
-    // Обновление состояния нижнего меню и кнопки "Выйти"
-    function updateNavigationBars() {
-      const nav = document.getElementById("bottom-nav");
-      const logoutBtn = document.getElementById("header-logout-btn");
-      const isUk = AppState.data.nativeLang === "uk";
-
-      if (logoutBtn) {
-        logoutBtn.textContent = isUk ? "Вийти" : "Выйти";
-        if (AppState.data.isAuthenticated) logoutBtn.classList.remove("hidden");
-        else logoutBtn.classList.add("hidden");
-      }
-
-      if (!AppState.data.isAuthenticated || !AppState.data.onboardingCompleted) {
-        nav.classList.add("hidden");
-        return;
-      }
-      nav.classList.remove("hidden");
-
-      const labels = {
-        today: isUk ? "Сьогодні" : "Сегодня",
-        exercises: isUk ? "Вправи" : "Упражнения",
-        chat: isUk ? "Чат" : "Чат",
-        profile: isUk ? "Профіль" : "Профиль"
-      };
-
-      ["today", "exercises", "chat", "profile"].forEach(id => {
-        const btn = document.getElementById(`nav-btn-${id}`);
-        if (!btn) return;
-        btn.textContent = labels[id];
-        btn.className = AppState.data.activeTab === id
-          ? "py-2 rounded-xl text-xs font-extrabold bg-ocean-500/15 text-ocean-600 dark:text-ocean-400 transition"
-          : "py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition";
-      });
-    }
-
-    // Главная функция отрисовки текущего экрана
-    function renderCurrentModule() {
-      updateNavigationBars();
-
-      // 1. Если не вошел в аккаунт — показываем экран Регистрации / Входа
-      if (!AppState.data.isAuthenticated) {
-        AuthUI.renderAuthScreen();
-        return;
-      }
-
-      // 2. Если вошел, но еще не прошел калибровку слов (Онбординг)
-      if (!AppState.data.onboardingCompleted) {
-        OnboardingModule.render();
-        return;
-      }
-
-      // 3. Отрисовка выбранной вкладки (Сегодня | Упражнения | Чат | Профиль)
-      const tab = AppState.data.activeTab || "today";
-      if (tab === "chat" && window.ChatModule) {
-        ChatModule.render();
-      } else if (window.DashboardModule) {
-        DashboardModule.render();
-      }
-    }
-
-    // Запуск приложения при открытии страницы
-    async function bootstrapApp() {
-      AppState.init();
-
-      // Проверяем активную облачную сессию в Supabase и подтягиваем прогресс аккаунта
-      if (window.supabaseClient && window.AuthModule) {
-        try {
-          const { data: { session } } = await window.supabaseClient.auth.getSession();
-          if (session && session.user) {
-            await AuthModule.syncProfileFromSession(session.user);
-          }
-        } catch (e) {}
-      }
-
-      renderCurrentModule();
-    }
-
-    bootstrapApp();
   <script>
     function goHomeMenu() {
       if (!AppState.data.isAuthenticated) {
@@ -269,7 +161,7 @@
       }
     }
 
-    // Железобетонная загрузка с принудительной синхронизацией из Supabase
+    // Железобетонная загрузка с принудительной синхронизацией статуса из базы Supabase
     async function bootstrapApp() {
       AppState.init();
 
@@ -279,7 +171,6 @@
           if (session && session.user) {
             AppState.data.isAuthenticated = true;
             
-            // Запрашиваем актуальный профиль из базы Supabase
             const { data: profile } = await window.supabaseClient
               .from("profiles")
               .select("*")
@@ -291,7 +182,6 @@
               AppState.data.selectedLevel = profile.level || AppState.data.selectedLevel;
               AppState.data.nativeLang = profile.native_lang || AppState.data.nativeLang;
               
-              // Жестко берем статус онбординга из базы данных!
               if (typeof profile.onboarding_completed === "boolean") {
                 AppState.data.onboardingCompleted = profile.onboarding_completed;
               }
