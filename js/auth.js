@@ -1,9 +1,7 @@
 // ============================================================================
 // ФАЙЛ: js/auth.js
-// Авторизация + Двусторонняя синхронизация прогресса с аккаунтом в Supabase
 // ============================================================================
 
-// 🔑 ВСТАВЬ СВОЙ URL И ANON KEY ИЗ SUPABASE PROJECT SETTINGS:
 const SUPABASE_URL = "https://nmlaqvrfxsksuwbjusjh.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbGFxdnJmeHNrc3V3Ymp1c2poIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxODYzNzUsImV4cCI6MjEwNzc2MjM3NX0._26CSKgxQ7R3rvF6eTiesNtOumPQC5bCVa9RW6VLZEk";
 
@@ -19,13 +17,11 @@ try {
     window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
 } catch (err) {
-  console.warn("Supabase не настроен:", err);
   window.supabaseClient = null;
 }
 
 const AuthModule = {
   currentUserId: null,
-  _syncTimer: null,
 
   initAuthListener() {
     if (!window.supabaseClient) return;
@@ -39,7 +35,6 @@ const AuthModule = {
     });
   },
 
-  // Подтягиваем уровень, язык и все отмеченные слова из аккаунта в облаке
   async syncProfileFromSession(user) {
     this.currentUserId = user.id;
     const fallbackName = (user.user_metadata && user.user_metadata.username) || user.email.split("@")[0];
@@ -57,16 +52,13 @@ const AuthModule = {
           if (profile.username) username = profile.username;
           if (profile.level) AppState.data.selectedLevel = profile.level;
           if (profile.native_lang) AppState.data.nativeLang = profile.native_lang;
+          
           if (typeof profile.onboarding_completed === "boolean") {
             AppState.data.onboardingCompleted = profile.onboarding_completed;
           }
 
-          // Если в облаке уже есть сохраненные слова — загружаем их на устройство!
           if (profile.word_status && Object.keys(profile.word_status).length > 0) {
             GaplessDB.setCloudWordStatus(profile.word_status);
-          } else if (Object.keys(GaplessDB.userWordStatus).length > 0) {
-            // Если в облаке пусто, а на устройстве уже что-то было — выгружаем в облако
-            this.saveProgressToCloud();
           }
         }
       } catch (e) {}
@@ -78,32 +70,28 @@ const AuthModule = {
     AppState.save();
   },
 
-  // Сохранить текущие слова, уровень и статус онбординга в облачный аккаунт
-  saveProgressToCloud() {
+  // Жесткое немедленное сохранение прогресса в Supabase
+  async saveProgressToCloud() {
     if (!window.supabaseClient || !this.currentUserId) return;
 
-    clearTimeout(this._syncTimer);
-    this._syncTimer = setTimeout(async () => {
-      try {
-        await window.supabaseClient
-          .from("profiles")
-          .update({
-            level: AppState.data.selectedLevel || "B1",
-            native_lang: AppState.data.nativeLang || "ru",
-            onboarding_completed: !!AppState.data.onboardingCompleted,
-            word_status: GaplessDB.userWordStatus || {},
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", this.currentUserId);
-      } catch (e) {
-        console.warn("Не удалось синхронизировать прогресс с облаком:", e);
-      }
-    }, 350);
+    try {
+      await window.supabaseClient
+        .from("profiles")
+        .update({
+          level: AppState.data.selectedLevel || "B1",
+          native_lang: AppState.data.nativeLang || "ru",
+          onboarding_completed: !!AppState.data.onboardingCompleted,
+          word_status: GaplessDB.userWordStatus || {},
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", this.currentUserId);
+    } catch (e) {
+      console.warn("Ошибка сохранения в облако:", e);
+    }
   },
 
   async signUp(email, password, username) {
     const cleanEmail = email.toLowerCase().trim();
-
     if (!window.supabaseClient) {
       showToast("Вставь ключи Supabase в js/auth.js");
       return { status: "error" };
@@ -116,10 +104,7 @@ const AuthModule = {
         password: password,
         options: {
           emailRedirectTo: redirectUrl,
-          data: {
-            username: username,
-            level: AppState.data.selectedLevel || "B1"
-          }
+          data: { username: username, level: AppState.data.selectedLevel || "B1" }
         }
       });
 
@@ -142,7 +127,7 @@ const AuthModule = {
 
       return { status: "confirm_email", email: cleanEmail };
     } catch (e) {
-      showToast("Ошибка сети при регистрации");
+      showToast("Ошибка сети");
       return { status: "error" };
     }
   },
@@ -151,19 +136,17 @@ const AuthModule = {
     if (!window.supabaseClient || !email) return;
     try {
       const redirectUrl = window.location.origin + window.location.pathname;
-      const { error } = await window.supabaseClient.auth.resend({
+      await window.supabaseClient.auth.resend({
         type: "signup",
         email: email,
         options: { emailRedirectTo: redirectUrl }
       });
-      if (error) showToast("Подожди минуту перед повторной отправкой");
-      else showToast("📩 Письмо отправлено повторно!");
+      showToast("📩 Письмо отправлено повторно!");
     } catch (e) {}
   },
 
   async signIn(email, password) {
     const cleanEmail = email.toLowerCase().trim();
-
     if (!window.supabaseClient) {
       showToast("Вставь ключи Supabase в js/auth.js");
       return false;
@@ -187,7 +170,7 @@ const AuthModule = {
       if (data && data.user) {
         GaplessDB.clearLocalStatus();
         await this.syncProfileFromSession(data.user);
-        showToast("✓ Вход выполнен! Прогресс синхронизирован");
+        showToast("✓ Вход выполнен!");
         return true;
       }
     } catch (e) {
