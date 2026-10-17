@@ -21,7 +21,7 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=600" />
+  <link rel="stylesheet" href="style.css?v=700" />
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center transition-colors duration-300">
 
@@ -29,7 +29,7 @@
 
     <!-- Верхняя шапка -->
     <header class="sticky top-0 z-30 backdrop-blur-md bg-white/85 dark:bg-slate-900/85 border-b border-slate-200 dark:border-slate-800 px-5 py-3.5 flex items-center justify-between">
-      <button onclick="switchAppTab('today')" class="flex items-center gap-2.5 text-left hover:opacity-80 transition">
+      <button onclick="goHomeMenu()" class="flex items-center gap-2.5 text-left hover:opacity-80 transition" title="На главное меню">
         <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-ocean-500 to-mint-500 flex items-center justify-center text-white font-extrabold text-base shadow-sm">G</div>
         <span class="font-extrabold tracking-tight text-base">Gapless</span>
       </button>
@@ -41,7 +41,7 @@
     </header>
 
     <!-- Основной контейнер экрана -->
-    <main id="app-root" class="flex-1 flex flex-col pb-24"></main>
+    <main id="app-root" class="flex-1 flex flex-col"></main>
 
     <!-- Нижнее меню навигации -->
     <nav id="bottom-nav" class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md backdrop-blur-lg bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 px-3 py-2 z-30">
@@ -57,19 +57,36 @@
     <div id="app-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-300 bg-slate-900/95 dark:bg-white/95 text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-semibold shadow-xl"></div>
   </div>
 
-  <!-- СКРИПТЫ -->
-  <script src="data/vocabulary.js?v=600"></script>
-  <script src="js/db-service.js?v=600"></script>
-  <script src="js/state.js?v=600"></script>
-  <script src="js/auth.js?v=600"></script>
-  <script src="js/auth-ui.js?v=600"></script>
-  <script src="js/onboarding.js?v=600"></script>
-  <script src="js/dashboard.js?v=600"></script>
-  <script src="js/chat.js?v=600"></script>
+  <!-- ПОДКЛЮЧЕНИЕ ОРИГИНАЛЬНЫХ МОДУЛЕЙ -->
+  <script src="data/vocabulary.js?v=700"></script>
+  <script src="js/db-service.js?v=700"></script>
+  <script src="js/state.js?v=700"></script>
+  <script src="js/auth.js?v=700"></script>
+  <script src="js/auth-ui.js?v=700"></script>
+  <script src="js/onboarding.js?v=700"></script>
+  <script src="js/dashboard.js?v=700"></script>
+  <script src="js/chat.js?v=700"></script>
 
   <script>
+    function goHomeMenu() {
+      if (!AppState.data.isAuthenticated) {
+        AuthUI.renderAuthScreen();
+        return;
+      }
+      if (!AppState.data.onboardingCompleted) {
+        OnboardingModule.goToStep(1);
+        return;
+      }
+      AppState.data.activeTab = "today";
+      AppState.save();
+      renderCurrentModule();
+    }
+
     function switchAppTab(tabId) {
       AppState.data.activeTab = tabId;
+      if (tabId === 'chat' && window.ChatModule && typeof ChatModule.ensureConnected === 'function') {
+        ChatModule.ensureConnected();
+      }
       AppState.save();
       renderCurrentModule();
     }
@@ -110,113 +127,38 @@
 
     function renderCurrentModule() {
       updateNavigationBars();
-      const root = document.getElementById("app-root");
-      if (!root) return;
-      root.innerHTML = "";
 
-      // 1. Если не авторизован — показываем экран входа
+      const rootContainer = document.getElementById("app-root");
+      if (rootContainer) rootContainer.innerHTML = "";
+
+      // 1. Проверяем авторизацию
       if (!AppState.data.isAuthenticated) {
         if (window.AuthUI && typeof AuthUI.renderAuthScreen === "function") {
           AuthUI.renderAuthScreen();
-        } else {
-          root.innerHTML = `<div class="p-6 text-center text-xs">Загрузка авторизации...</div>`;
         }
         return;
       }
 
-      const tab = AppState.data.activeTab || "today";
-      const isUk = AppState.data.nativeLang === "uk";
-      const userName = AppState.data.userName || "Alex";
-      const level = AppState.data.selectedLevel || "B1";
-      const stats = window.GaplessDB ? GaplessDB.getStatistics(level) : { known: 0, gaps: 0 };
+      // 2. Проверяем онбординг
+      if (!AppState.data.onboardingCompleted) {
+        if (window.OnboardingModule && typeof OnboardingModule.render === "function") {
+          OnboardingModule.render();
+        }
+        return;
+      }
 
-      // 2. ВКЛАДКА ЧАТ
+      // 3. Рендерим нужный модуль по вкладке
+      const tab = AppState.data.activeTab || "today";
+
       if (tab === "chat") {
         if (window.ChatModule && typeof ChatModule.render === "function") {
           ChatModule.render();
-        } else {
-          root.innerHTML = `<div class="p-5 text-xs text-center text-slate-400">Загрузка чата...</div>`;
         }
-        return;
+      } else {
+        if (window.DashboardModule && typeof DashboardModule.render === "function") {
+          DashboardModule.render();
+        }
       }
-
-      // 3. ВКЛАДКА УПРАЖНЕНИЯ
-      if (tab === "exercises") {
-        root.innerHTML = `
-          <div class="p-5 space-y-4 fade-in">
-            <h1 class="text-xl font-extrabold">${isUk ? 'Вправи' : 'Упражнения'}</h1>
-            <div onclick="showToast('Запуск карточек пропусков...')" class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-ocean-500 transition flex items-center justify-between shadow-sm">
-              <div>
-                <div class="text-sm font-bold text-ocean-500">🃏 ${isUk ? 'Картки моїх прогалин' : 'Карточки моих пробелов'}</div>
-                <div class="text-xs text-slate-400 mt-0.5">${isUk ? `Слів у прогалинах: ${stats.gaps}` : `Слов в пробелах: ${stats.gaps}`}</div>
-              </div>
-              <span class="text-slate-400">→</span>
-            </div>
-          </div>
-        `;
-        return;
-      }
-
-      // 4. ВКЛАДКА ПРОФИЛЬ
-      if (tab === "profile") {
-        root.innerHTML = `
-          <div class="p-5 space-y-4 fade-in">
-            <div class="p-6 rounded-3xl bg-gradient-to-br from-ocean-600 to-mint-600 text-white shadow-xl space-y-2">
-              <div class="text-xl font-extrabold">${userName}</div>
-              <div class="text-xs opacity-85">${AppState.data.userEmail || 'no email'}</div>
-              <div class="text-xs font-bold pt-1">Уровень: ${level}</div>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
-                <div class="text-2xl font-extrabold text-mint-500">${stats.known}</div>
-                <div class="text-xs text-slate-400 mt-1">Изучено слов</div>
-              </div>
-              <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
-                <div class="text-2xl font-extrabold text-gap-500">${stats.gaps}</div>
-                <div class="text-xs text-slate-400 mt-1">Пробелы</div>
-              </div>
-            </div>
-          </div>
-        `;
-        return;
-      }
-
-      // 5. ВКЛАДКА СЕГОДНЯ (Главная)
-      root.innerHTML = `
-        <div class="p-5 space-y-4 fade-in">
-          <div class="p-6 rounded-3xl bg-gradient-to-br from-ocean-500 to-mint-500 text-white shadow-xl space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-xs uppercase font-extrabold opacity-85">Gapless Daily</span>
-              <span class="px-2.5 py-1 rounded-full bg-white/20 text-xs font-bold">Level ${level}</span>
-            </div>
-            <div>
-              <h2 class="text-2xl font-extrabold">${isUk ? 'Привіт, ' : 'Привет, '}${userName}!</h2>
-              <p class="text-xs opacity-90 mt-0.5">${isUk ? 'Твоя щоденна база слів готова до повторення.' : 'Твоя ежедневная база слов готова к повторению.'}</p>
-            </div>
-            <div class="grid grid-cols-2 gap-2 pt-1">
-              <div class="bg-black/15 p-3 rounded-2xl text-center">
-                <div class="text-lg font-extrabold text-mint-200">${stats.known}</div>
-                <div class="text-[10px] opacity-80">${isUk ? 'Вивчено' : 'Изучено'}</div>
-              </div>
-              <div class="bg-black/15 p-3 rounded-2xl text-center">
-                <div class="text-lg font-extrabold text-amber-200">${stats.gaps}</div>
-                <div class="text-[10px] opacity-80">${isUk ? 'Прогалини' : 'Пробелы'}</div>
-              </div>
-            </div>
-          </div>
-
-          <button onclick="switchAppTab('chat')" class="w-full p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-left hover:border-ocean-500 transition flex items-center justify-between shadow-sm">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-mint-500/15 flex items-center justify-center text-lg">💬</div>
-              <div>
-                <div class="text-sm font-extrabold">Онлайн чат практики</div>
-                <div class="text-xs text-slate-400">Общение с AI и друзьями</div>
-              </div>
-            </div>
-            <span class="text-mint-500 font-bold">→</span>
-          </button>
-        </div>
-      `;
     }
 
     async function bootstrapApp() {
@@ -232,7 +174,10 @@
       renderCurrentModule();
     }
 
-    bootstrapApp();
+    // Запускаем приложение после полной загрузки всех скриптов
+    window.addEventListener("DOMContentLoaded", () => {
+      bootstrapApp();
+    });
   </script>
 </body>
 </html>
