@@ -1,6 +1,6 @@
 // ============================================================================
 // ФАЙЛ: js/onboarding.js
-// Модуль 1: Приветствие, выбор уровня и калибровка знаний
+// Модуль 1: Приветствие, выбор уровня, отсев слов и завершение калибровки
 // ============================================================================
 
 const ONBOARDING_I18N = {
@@ -159,16 +159,30 @@ const OnboardingModule = {
     this.render();
   },
 
+  // Завершение онбординга с сохранением в облако Supabase
   finishOnboarding() {
     const nameInput = document.getElementById("onb-name-input");
     const emailInput = document.getElementById("onb-email-input");
-    if (nameInput && nameInput.value.trim()) AppState.data.userName = nameInput.value.trim();
-    if (emailInput && emailInput.value.trim()) AppState.data.userEmail = emailInput.value.trim();
+    if (nameInput && nameInput.value.trim()) {
+      AppState.data.userName = nameInput.value.trim();
+    }
+    if (emailInput && emailInput.value.trim()) {
+      AppState.data.userEmail = emailInput.value.trim();
+    }
 
     AppState.data.onboardingCompleted = true;
     AppState.data.activeTab = "today";
     AppState.save();
-    if (window.renderCurrentModule) window.renderCurrentModule();
+
+    // Принудительно сохраняем флаг онбординга и имя в Supabase
+    if (window.AuthModule && window.AuthModule.saveProgressToCloud) {
+      window.AuthModule.saveProgressToCloud();
+    }
+
+    showToast("✓ Профиль сохранен!");
+    if (window.renderCurrentModule) {
+      window.renderCurrentModule();
+    }
   },
 
   render() {
@@ -300,7 +314,7 @@ const OnboardingModule = {
       return;
     }
 
-    // ШАГ 3: ОТСЕВ СЛОВ + КНОПКА ПЕРЕВОДА ПО ЖЕЛАНИЮ (ПО УМОЛЧАНИЮ ВЫКЛ)
+    // ШАГ 3
     if (step === 3) {
       const selectedLvl = AppState.data.selectedLevel;
       const catFilter = AppState.data.categoryFilter;
@@ -411,7 +425,6 @@ const OnboardingModule = {
 
             ${categoryTabsHtml}
 
-            <!-- Панель: Группы / По одному + Кнопка Перевод (по умолчанию выкл) -->
             <div class="flex items-center gap-2 mb-3">
               <div class="flex-1 grid grid-cols-2 bg-slate-200/70 dark:bg-slate-900 p-1 rounded-xl text-xs font-bold border border-slate-200/60 dark:border-slate-800">
                 <button onclick="OnboardingModule.setFilterMode('clusters')" class="py-1.5 rounded-lg transition ${AppState.data.filterMode === 'clusters' ? 'bg-white dark:bg-slate-800 text-ocean-600 dark:text-ocean-400 shadow-sm' : 'text-slate-500'}">
@@ -457,7 +470,7 @@ const OnboardingModule = {
 
       container.innerHTML = `
         ${stepsHeaderHtml}
-        <div class="p-6 flex-1 flex flex-col justify-between fade-in">
+        <div class="p-6 flex-1 flex flex-col justify-between fade-in pb-20">
           <div>
             <div class="p-5 rounded-3xl bg-gradient-to-br from-ocean-600 to-mint-600 text-white shadow-xl mb-5">
               <div class="text-xs uppercase tracking-wider opacity-85 font-bold mb-1">${i18n.step4Badge}</div>
