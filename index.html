@@ -21,156 +21,583 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=200" />
+  <link rel="stylesheet" href="style.css?v=300" />
+  <style>
+    body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+    input, textarea { -webkit-user-select: text !important; user-select: text !important; }
+    .perspective { perspective: 1000px; }
+    .flip-card { transform-style: preserve-3d; transition: transform 0.4s ease; }
+    .flip-card.flipped { transform: rotateY(180deg); }
+    .flip-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+    .flip-back { transform: rotateY(180deg); }
+  </style>
 </head>
-<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center transition-colors duration-300">
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center">
 
   <div class="w-full max-w-md min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl relative overflow-x-hidden border-x border-slate-200/70 dark:border-slate-800/80">
 
     <!-- Шапка -->
     <header class="sticky top-0 z-30 backdrop-blur-md bg-white/85 dark:bg-slate-900/85 border-b border-slate-200 dark:border-slate-800 px-5 py-3.5 flex items-center justify-between">
-      <button onclick="goHomeMenu()" class="flex items-center gap-2.5 text-left hover:opacity-80 transition" title="На главное меню">
+      <button onclick="GaplessApp.goHome()" class="flex items-center gap-2.5 text-left hover:opacity-80 transition">
         <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-ocean-500 to-mint-500 flex items-center justify-center text-white font-extrabold text-base shadow-sm">G</div>
         <span class="font-extrabold tracking-tight text-base">Gapless</span>
       </button>
 
       <div class="flex items-center gap-2">
-        <button id="header-logout-btn" onclick="AuthModule.signOut()" class="hidden px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 hover:text-red-500 transition">Выйти</button>
-        <button onclick="AppState.toggleTheme()" id="header-theme-btn" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm">🌙</button>
+        <button id="logout-btn" onclick="GaplessApp.signOut()" class="hidden px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 hover:text-red-500 transition">Выйти</button>
+        <button onclick="GaplessApp.toggleTheme()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm">🌙</button>
       </div>
     </header>
 
-    <!-- Основной контейнер экрана -->
+    <!-- Основной контейнер -->
     <main id="app-root" class="flex-1 flex flex-col"></main>
 
     <!-- Нижнее меню -->
     <nav id="bottom-nav" class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md backdrop-blur-lg bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 px-3 py-2 z-30">
-      <div class="grid grid-cols-4 gap-1 text-center">
-        <button onclick="switchAppTab('today')" id="nav-btn-today" class="py-2 rounded-xl text-xs font-bold transition">Сегодня</button>
-        <button onclick="switchAppTab('exercises')" id="nav-btn-exercises" class="py-2 rounded-xl text-xs font-bold transition">Упражнения</button>
-        <button onclick="switchAppTab('chat')" id="nav-btn-chat" class="py-2 rounded-xl text-xs font-bold transition">Чат</button>
-        <button onclick="switchAppTab('profile')" id="nav-btn-profile" class="py-2 rounded-xl text-xs font-bold transition">Профиль</button>
+      <div class="grid grid-cols-4 gap-1 text-center text-xs font-bold">
+        <button onclick="GaplessApp.switchTab('today')" id="tab-today" class="py-2 rounded-xl transition">Сегодня</button>
+        <button onclick="GaplessApp.switchTab('exercises')" id="tab-exercises" class="py-2 rounded-xl transition">Упражнения</button>
+        <button onclick="GaplessApp.switchTab('chat')" id="tab-chat" class="py-2 rounded-xl transition">Чат</button>
+        <button onclick="GaplessApp.switchTab('profile')" id="tab-profile" class="py-2 rounded-xl transition">Профиль</button>
       </div>
     </nav>
 
-    <!-- Уведомления -->
-    <div id="app-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-300 bg-slate-900/95 dark:bg-white/95 text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-semibold shadow-xl"></div>
+    <!-- Тост -->
+    <div id="app-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-300 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-semibold shadow-xl"></div>
   </div>
 
-  <!-- ПОДКЛЮЧЕНИЕ МОДУЛЕЙ -->
-  <script src="data/vocabulary.js?v=200"></script>
-  <script src="js/db-service.js?v=200"></script>
-  <script src="js/state.js?v=200"></script>
-  <script src="js/auth.js?v=200"></script>
-  <script src="js/auth-ui.js?v=200"></script>
-  <script src="js/onboarding.js?v=200"></script>
-  <script src="js/dashboard.js?v=200"></script>
-  <script src="js/chat.js?v=200"></script>
+  <script src="data/vocabulary.js?v=300"></script>
+  <script src="js/db-service.js?v=300"></script>
 
   <script>
-    function goHomeMenu() {
-      if (!AppState.data.isAuthenticated) {
-        AuthUI.renderAuthScreen();
-        return;
-      }
-      if (!AppState.data.onboardingCompleted) {
-        OnboardingModule.goToStep(1);
-        return;
-      }
-      AppState.data.activeTab = "today";
-      if (window.DashboardModule) {
-        DashboardModule.dailyState = "idle";
-        DashboardModule.activeExercise = null;
-      }
-      AppState.save();
-      renderCurrentModule();
+    // 🔑 ВСТАВЬ СВОИ КЛЮЧИ SUPABASE (если хочешь живой онлайн-чат):
+    const SUPABASE_URL = "";
+    const SUPABASE_ANON_KEY = "";
+
+    window.supabaseClient = (window.supabase && SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("ТВОЙ"))
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+    function showToast(msg) {
+      const t = document.getElementById("app-toast");
+      if (!t) return;
+      t.textContent = msg;
+      t.classList.remove("opacity-0", "translate-y-2");
+      t.classList.add("opacity-100", "translate-y-0");
+      setTimeout(() => {
+        t.classList.remove("opacity-100", "translate-y-0");
+        t.classList.add("opacity-0", "translate-y-2");
+      }, 2000);
     }
 
-    function switchAppTab(tabId) {
-      AppState.data.activeTab = tabId;
-      if (window.DashboardModule && tabId === 'exercises') {
-        DashboardModule.activeExercise = null;
-      }
-      if (tabId === 'chat' && window.ChatModule) {
-        ChatModule.ensureConnected();
-      }
-      AppState.save();
-      renderCurrentModule();
-    }
+    const GaplessApp = {
+      state: {
+        isAuthenticated: false,
+        userName: "Alex",
+        userEmail: "alex@gmail.com",
+        selectedLevel: "B1",
+        nativeLang: "ru",
+        theme: "dark",
+        activeTab: "today",
+        subExercise: null, // null | 'cards'
+        cardIndex: 0,
+        isFlipped: false,
+        chatSubTab: 'ai', // 'ai' | 'random' | 'friends'
+        chatRoomId: 'global_random',
+        chatMessages: [
+          { sender_name: 'Liam (AI)', text: "Hi! How was your day? Ready to practice English?" }
+        ],
+        friendsList: [],
+        subscription: null
+      },
 
-    function updateNavigationBars() {
-      const nav = document.getElementById("bottom-nav");
-      const logoutBtn = document.getElementById("header-logout-btn");
-      const isUk = AppState.data.nativeLang === "uk";
-
-      if (logoutBtn) {
-        logoutBtn.textContent = isUk ? "Вийти" : "Выйти";
-        if (AppState.data.isAuthenticated) logoutBtn.classList.remove("hidden");
-        else logoutBtn.classList.add("hidden");
-      }
-
-      if (!AppState.data.isAuthenticated || !AppState.data.onboardingCompleted) {
-        if (nav) nav.classList.add("hidden");
-        return;
-      }
-      if (nav) nav.classList.remove("hidden");
-
-      const labels = {
-        today: isUk ? "Сьогодні" : "Сегодня",
-        exercises: isUk ? "Вправи" : "Упражнения",
-        chat: isUk ? "Чат" : "Чат",
-        profile: isUk ? "Профіль" : "Профиль"
-      };
-
-      ["today", "exercises", "chat", "profile"].forEach(id => {
-        const btn = document.getElementById(`nav-btn-${id}`);
-        if (!btn) return;
-        btn.textContent = labels[id];
-        btn.className = AppState.data.activeTab === id
-          ? "py-2 rounded-xl text-xs font-extrabold bg-ocean-500/15 text-ocean-600 dark:text-ocean-400 transition"
-          : "py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition";
-      });
-    }
-
-    function renderCurrentModule() {
-      updateNavigationBars();
-
-      if (!AppState.data.isAuthenticated) {
-        AuthUI.renderAuthScreen();
-        return;
-      }
-
-      if (!AppState.data.onboardingCompleted) {
-        OnboardingModule.render();
-        return;
-      }
-
-      const tab = AppState.data.activeTab || "today";
-      if (tab === "chat" && window.ChatModule) {
-        ChatModule.render();
-      } else if (window.DashboardModule) {
-        DashboardModule.render();
-      }
-    }
-
-    async function bootstrapApp() {
-      AppState.init();
-      const nav = document.getElementById("bottom-nav");
-      if (nav) nav.classList.add("hidden");
-
-      if (window.supabaseClient && window.AuthModule) {
+      init() {
         try {
-          const { data: { session } } = await window.supabaseClient.auth.getSession();
-          if (session && session.user) {
-            await AuthModule.syncProfileFromSession(session.user);
+          const saved = localStorage.getItem("gapless_master_state_v3");
+          if (saved) this.state = { ...this.state, ...JSON.parse(saved) };
+        } catch(e) {}
+        this.applyTheme();
+        this.render();
+      },
+
+      save() {
+        try {
+          localStorage.setItem("gapless_master_state_v3", JSON.stringify(this.state));
+        } catch(e) {}
+      },
+
+      applyTheme() {
+        if (this.state.theme === "dark") document.documentElement.classList.add("dark");
+        else document.documentElement.classList.remove("dark");
+      },
+
+      toggleTheme() {
+        this.state.theme = this.state.theme === "dark" ? "light" : "dark";
+        this.applyTheme();
+        this.save();
+        this.render();
+      },
+
+      switchTab(tab) {
+        this.state.activeTab = tab;
+        this.state.subExercise = null;
+        if (tab === 'chat' && this.state.chatSubTab === 'random') {
+          this.initRealtimeChat();
+        }
+        this.save();
+        this.render();
+      },
+
+      goHome() {
+        this.state.activeTab = "today";
+        this.state.subExercise = null;
+        this.save();
+        this.render();
+      },
+
+      signOut() {
+        this.state.isAuthenticated = false;
+        if (this.state.subscription) {
+          try { this.state.subscription.unsubscribe(); } catch(e) {}
+        }
+        this.save();
+        showToast("Вы вышли из аккаунта");
+        this.render();
+      },
+
+      startCards() {
+        this.state.subExercise = 'cards';
+        this.state.cardIndex = 0;
+        this.state.isFlipped = false;
+        this.render();
+      },
+
+      nextCard(known) {
+        const gaps = GaplessDB.getUserGapWords(this.state.selectedLevel);
+        const currentWord = gaps[this.state.cardIndex];
+        if (currentWord && known) {
+          GaplessDB.setWordStatus(currentWord.en, "known");
+          showToast("✓ Слово изучено!");
+        }
+        this.state.isFlipped = false;
+        this.state.cardIndex++;
+        this.render();
+      },
+
+      setChatSubTab(sub) {
+        this.state.chatSubTab = sub;
+        if (this.state.subscription) {
+          try { this.state.subscription.unsubscribe(); } catch(e) {}
+          this.state.subscription = null;
+        }
+
+        if (sub === 'ai') {
+          this.state.chatMessages = [
+            { sender_name: 'Liam (AI)', text: "Hi! I'm your AI partner. What are your plans for today?" }
+          ];
+        } else if (sub === 'random') {
+          this.initRealtimeChat();
+        }
+        this.render();
+      },
+
+      async initRealtimeChat() {
+        const isUk = this.state.nativeLang === "uk";
+        if (!window.supabaseClient) {
+          this.state.chatMessages = [
+            { sender_name: 'Sarah (London)', text: "Hey! Configure Supabase keys in index.html to chat with real users live." }
+          ];
+          this.render();
+          return;
+        }
+
+        showToast(isUk ? "Підключення до чату..." : "Подключение к чату...");
+        try {
+          const { data } = await window.supabaseClient.from("messages").select("*").eq("room_id", this.state.chatRoomId).order("created_at", { ascending: true }).limit(30);
+          if (data && data.length > 0) this.state.chatMessages = data;
+        } catch(e) {}
+        this.render();
+
+        this.state.subscription = window.supabaseClient
+          .channel(`room_${this.state.chatRoomId}`)
+          .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${this.state.chatRoomId}` }, (payload) => {
+            this.state.chatMessages.push(payload.new);
+            if (this.state.activeTab === 'chat') {
+              this.render();
+              const box = document.getElementById("chat-messages-box");
+              if (box) box.scrollTop = box.scrollHeight;
+            }
+          })
+          .subscribe();
+      },
+
+      async sendChatMessage() {
+        const input = document.getElementById("chat-input-field");
+        if (!input || !input.value.trim()) return;
+        const text = input.value.trim();
+        input.value = "";
+
+        const myName = this.state.userName || "User";
+
+        if (this.state.chatSubTab === 'ai' || !window.supabaseClient) {
+          this.state.chatMessages.push({ sender_name: myName, text });
+          this.render();
+          setTimeout(() => {
+            this.state.chatMessages.push({ sender_name: "Liam (AI)", text: "That's wonderful! Could you tell me more?" });
+            if (this.state.activeTab === 'chat') this.render();
+          }, 800);
+          return;
+        }
+
+        try {
+          await window.supabaseClient.from("messages").insert([{ room_id: this.state.chatRoomId, sender_name: myName, text }]);
+        } catch(e) {
+          showToast("Ошибка отправки");
+        }
+      },
+
+      addFriend() {
+        const input = document.getElementById("friend-input");
+        if (!input || !input.value.trim()) return;
+        const nick = input.value.trim();
+        if (!this.state.friendsList.includes(nick)) {
+          this.state.friendsList.push(nick);
+          this.save();
+        }
+        showToast(`✓ ${nick} добавлен в друзья`);
+        this.render();
+      },
+
+      inspectWord(rawWord) {
+        const wordModel = GaplessDB.findOrCreateWord(rawWord, "слово из контекста");
+        if (!wordModel) return;
+        const isUk = this.state.nativeLang === "uk";
+        const modal = document.getElementById("word-inspect-modal");
+        if (!modal) return;
+
+        modal.innerHTML = `
+          <div class="p-3.5 rounded-2xl bg-slate-900 text-white border border-slate-700 shadow-xl flex items-center justify-between fade-in">
+            <div class="flex items-center gap-3">
+              <button onclick="GaplessDB.wordsMap.get('${wordModel.en.toLowerCase()}').speak()" class="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center text-xs">🔊</button>
+              <div>
+                <div class="text-sm font-extrabold text-ocean-400">${wordModel.en}</div>
+                <div class="text-xs text-slate-300">${wordModel.getTranslation(this.state.nativeLang)}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="GaplessDB.setWordStatus('${wordModel.en}', 'gap'); showToast('+ В пробелы'); document.getElementById('word-inspect-modal').innerHTML='';" class="px-3 py-1.5 rounded-xl bg-gap-600 text-white text-xs font-bold">
+                + ${isUk ? 'У прогалини' : 'В пробелы'}
+              </button>
+              <button onclick="document.getElementById('word-inspect-modal').innerHTML=''" class="text-slate-400 hover:text-white px-2 font-bold">✕</button>
+            </div>
+          </div>
+        `;
+      },
+
+      render() {
+        const root = document.getElementById("app-root");
+        const nav = document.getElementById("bottom-nav");
+        const logoutBtn = document.getElementById("logout-btn");
+        if (!root) return;
+
+        const isUk = this.state.nativeLang === "uk";
+
+        // Экран входа
+        if (!this.state.isAuthenticated) {
+          if (nav) nav.classList.add("hidden");
+          if (logoutBtn) logoutBtn.classList.add("hidden");
+          root.innerHTML = `
+            <div class="p-6 my-auto flex-1 flex flex-col justify-center max-w-sm mx-auto w-full space-y-4">
+              <div class="text-center space-y-2">
+                <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-ocean-500 to-mint-500 flex items-center justify-center text-white font-extrabold text-2xl mx-auto shadow-lg">G</div>
+                <h1 class="text-2xl font-extrabold">${isUk ? 'Вхід у Gapless' : 'Вход в Gapless'}</h1>
+                <p class="text-xs text-slate-400">${isUk ? 'Створи профіль для збереження прогресу' : 'Создай профиль для сохранения пробелов и друзей'}</p>
+              </div>
+              <div class="space-y-3 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <input id="login-name" type="text" placeholder="${isUk ? 'Твій нікнейм' : 'Твой никнейм'}" value="${this.state.userName}" class="w-full px-3.5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs outline-none" />
+                <button onclick="GaplessApp.state.userName = document.getElementById('login-name').value || 'Alex'; GaplessApp.state.isAuthenticated = true; GaplessApp.save(); GaplessApp.render(); showToast('✓ Добро пожаловать!');"
+                  class="w-full py-3.5 rounded-xl bg-gradient-to-r from-ocean-600 to-mint-600 text-white font-bold text-xs shadow-md">
+                  ${isUk ? 'Увійти в додаток →' : 'Войти в приложение →'}
+                </button>
+              </div>
+            </div>
+          `;
+          return;
+        }
+
+        if (nav) nav.classList.remove("hidden");
+        if (logoutBtn) logoutBtn.classList.remove("hidden");
+
+        const tab = this.state.activeTab || "today";
+
+        ["today", "exercises", "chat", "profile"].forEach(id => {
+          const btn = document.getElementById(`tab-${id}`);
+          if (btn) {
+            btn.className = tab === id
+              ? "py-2 rounded-xl text-xs font-extrabold bg-ocean-500/15 text-ocean-600 dark:text-ocean-400 transition"
+              : "py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition";
           }
-        } catch (e) {}
+        });
+
+        // 1. Карточки 15-минутки
+        if (tab === 'exercises' && this.state.subExercise === 'cards') {
+          const gaps = GaplessDB.getUserGapWords(this.state.selectedLevel);
+          const currentWord = gaps[this.state.cardIndex];
+
+          if (!currentWord || this.state.cardIndex >= gaps.length) {
+            root.innerHTML = `
+              <div class="p-6 my-auto text-center space-y-4 fade-in">
+                <div class="w-16 h-16 bg-mint-500/20 text-mint-500 rounded-full flex items-center justify-center text-3xl mx-auto">🎉</div>
+                <h2 class="text-xl font-extrabold">${isUk ? 'Тренування завершено!' : 'Тренировка завершена!'}</h2>
+                <p class="text-xs text-slate-400">${isUk ? 'Ти пройшов усі слова у своїх прогалинах.' : 'Ты успешно повторил все слова из своих пробелов.'}</p>
+                <button onclick="GaplessApp.state.subExercise = null; GaplessApp.render();" class="px-6 py-3 rounded-xl bg-ocean-600 text-white text-xs font-bold">
+                  ${isUk ? '← Назад до вправ' : '← Назад к упражнениям'}
+                </button>
+              </div>
+            `;
+            return;
+          }
+
+          root.innerHTML = `
+            <div class="p-5 flex flex-col h-[calc(100vh-120px)] justify-between fade-in">
+              <div class="flex items-center justify-between">
+                <button onclick="GaplessApp.state.subExercise = null; GaplessApp.render();" class="text-xs font-bold text-ocean-500">← ${isUk ? 'Назад' : 'Назад'}</button>
+                <span class="text-xs font-bold text-slate-400">${this.state.cardIndex + 1} / ${gaps.length}</span>
+              </div>
+
+              <div class="perspective w-full max-w-xs mx-auto h-64 cursor-pointer" onclick="GaplessApp.state.isFlipped = !GaplessApp.state.isFlipped; GaplessApp.render();">
+                <div class="flip-card w-full h-full relative rounded-3xl shadow-xl ${this.state.isFlipped ? 'flipped' : ''}">
+                  <div class="flip-face absolute inset-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl flex flex-col items-center justify-center p-6 text-center">
+                    <span class="text-2xl font-extrabold text-ocean-500 mb-2">${currentWord.en}</span>
+                    <span class="text-[11px] text-slate-400">${isUk ? 'Натисни, щоб перевернути' : 'Нажми, чтобы перевернуть'}</span>
+                  </div>
+                  <div class="flip-face flip-back absolute inset-0 bg-gradient-to-br from-ocean-600 to-mint-600 text-white rounded-3xl flex flex-col items-center justify-center p-6 text-center">
+                    <span class="text-xl font-extrabold mb-1">${currentWord.getTranslation(this.state.nativeLang)}</span>
+                    <span class="text-xs opacity-90">${currentWord.example || ''}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3 pb-4">
+                <button onclick="GaplessApp.nextCard(false)" class="py-3.5 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold text-xs">
+                  ${isUk ? 'Ще вчити' : 'Еще учу'}
+                </button>
+                <button onclick="GaplessApp.nextCard(true)" class="py-3.5 rounded-xl bg-mint-500/15 text-mint-600 dark:text-mint-400 font-bold text-xs">
+                  ✓ ${isUk ? 'Знаю' : 'Знаю'}
+                </button>
+              </div>
+            </div>
+          `;
+          return;
+        }
+
+        // 2. Сегодня
+        if (tab === "today") {
+          const stats = GaplessDB.getStatistics(this.state.selectedLevel);
+          root.innerHTML = `
+            <div class="p-5 space-y-4 pb-24 fade-in">
+              <div class="p-6 rounded-3xl bg-gradient-to-br from-ocean-500 to-mint-500 text-white shadow-xl space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs uppercase font-extrabold opacity-85">Gapless Daily</span>
+                  <span class="px-2.5 py-1 rounded-full bg-white/20 text-xs font-bold">Level ${this.state.selectedLevel}</span>
+                </div>
+                <div>
+                  <h2 class="text-2xl font-extrabold">${isUk ? 'Привіт, ' : 'Привет, '}${this.state.userName}!</h2>
+                  <p class="text-xs opacity-90 mt-0.5">${isUk ? 'Твоя щоденна база слів готова до повторення.' : 'Твоя ежедневная база слов готова к повторению.'}</p>
+                </div>
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                  <div class="bg-black/15 p-3 rounded-2xl text-center">
+                    <div class="text-lg font-extrabold text-mint-200">${stats.known}</div>
+                    <div class="text-[10px] opacity-80">${isUk ? 'Вивчено' : 'Изучено'}</div>
+                  </div>
+                  <div class="bg-black/15 p-3 rounded-2xl text-center">
+                    <div class="text-lg font-extrabold text-amber-200">${stats.gaps}</div>
+                    <div class="text-[10px] opacity-80">${isUk ? 'Прогалини' : 'Пробелы'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="space-y-3">
+                <button onclick="GaplessApp.switchTab('exercises'); GaplessApp.startCards();" class="w-full p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-left hover:border-ocean-500 transition flex items-center justify-between shadow-sm">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-ocean-500/15 flex items-center justify-center text-lg">🚀</div>
+                    <div>
+                      <div class="text-sm font-extrabold">${isUk ? 'Розпочати 15-хвилинку' : 'Начать 15-минутку'}</div>
+                      <div class="text-xs text-slate-400">${isUk ? 'Картки твоїх прогалин' : 'Карточки твоих пробелов'} (${stats.gaps} сл.)</div>
+                    </div>
+                  </div>
+                  <span class="text-ocean-500 font-bold">→</span>
+                </button>
+
+                <button onclick="GaplessApp.switchTab('chat')" class="w-full p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-left hover:border-ocean-500 transition flex items-center justify-between shadow-sm">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-mint-500/15 flex items-center justify-center text-lg">💬</div>
+                    <div>
+                      <div class="text-sm font-extrabold">${isUk ? 'Онлайн чат практики' : 'Онлайн чат практики'}</div>
+                      <div class="text-xs text-slate-400">${isUk ? 'Спілкування з AI та друзями' : 'Общение с AI и друзьями'}</div>
+                    </div>
+                  </div>
+                  <span class="text-mint-500 font-bold">→</span>
+                </button>
+              </div>
+            </div>
+          `;
+        } 
+        // 3. Упражнения
+        else if (tab === "exercises") {
+          const stats = GaplessDB.getStatistics(this.state.selectedLevel);
+          root.innerHTML = `
+            <div class="p-5 space-y-4 pb-24 fade-in">
+              <div>
+                <h1 class="text-xl font-extrabold tracking-tight">${isUk ? 'Вправи' : 'Упражнения'}</h1>
+                <p class="text-xs text-slate-500">${isUk ? 'Обирай інструмент для тренування' : 'Выбирай инструмент для тренировки'}</p>
+              </div>
+
+              <div class="space-y-3">
+                <div onclick="GaplessApp.startCards()" class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-ocean-500/50 transition flex items-center justify-between">
+                  <div>
+                    <div class="text-sm font-bold text-ocean-500">🃏 ${isUk ? 'Картки моїх прогалин' : 'Карточки моих пробелов'}</div>
+                    <div class="text-xs text-slate-400 mt-0.5">${isUk ? `Тренування слів (${stats.gaps} сл.)` : `Тренировка слов (${stats.gaps} сл.)`}</div>
+                  </div>
+                  <span class="text-slate-400">→</span>
+                </div>
+              </div>
+            </div>
+          `;
+        } 
+        // 4. ЧАТ (AI, Онлайн чат и Друзья)
+        else if (tab === "chat") {
+          const sub = this.state.chatSubTab;
+          const friends = this.state.friendsList || [];
+
+          const topTabsHtml = `
+            <div class="p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0">
+              <div class="grid grid-cols-3 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
+                <button onclick="GaplessApp.setChatSubTab('ai')" class="py-1.5 rounded-lg transition ${sub === 'ai' ? 'bg-white dark:bg-slate-900 text-ocean-500 shadow-sm' : 'text-slate-500'}">AI Напарник</button>
+                <button onclick="GaplessApp.setChatSubTab('random')" class="py-1.5 rounded-lg transition ${sub === 'random' ? 'bg-white dark:bg-slate-900 text-ocean-500 shadow-sm' : 'text-slate-500'}">${isUk ? 'Онлайн чат' : 'Онлайн чат'}</button>
+                <button onclick="GaplessApp.setChatSubTab('friends')" class="py-1.5 rounded-lg transition ${sub === 'friends' ? 'bg-white dark:bg-slate-900 text-ocean-500 shadow-sm' : 'text-slate-500'}">${isUk ? 'Друзі' : 'Друзья'}</button>
+              </div>
+            </div>
+          `;
+
+          if (sub === 'friends') {
+            root.innerHTML = `
+              <div class="flex flex-col flex-1 pb-20 fade-in">
+                ${topTabsHtml}
+                <div class="p-4 space-y-4">
+                  <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                    <label class="block text-xs font-bold">${isUk ? 'Додати друга за нікнеймом:' : 'Добавить друга по никнейму:'}</label>
+                    <div class="flex gap-2">
+                      <input id="friend-input" type="text" placeholder="Alex" class="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs outline-none" />
+                      <button onclick="GaplessApp.addFriend()" class="px-4 py-2.5 rounded-xl bg-ocean-600 text-white text-xs font-bold">+ Додати</button>
+                    </div>
+                  </div>
+
+                  ${friends.length === 0 ? `
+                    <div class="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-1">
+                      <div class="text-sm font-bold">${isUk ? 'Список друзів порожній' : 'Список друзей пока пуст'}</div>
+                    </div>
+                  ` : `
+                    <div class="space-y-2">
+                      ${friends.map(f => `
+                        <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                          <span class="text-sm font-bold">${f}</span>
+                          <button onclick="GaplessApp.setChatSubTab('random')" class="px-3 py-1.5 rounded-xl bg-ocean-500/15 text-ocean-500 text-xs font-bold">Написать</button>
+                        </div>
+                      `).join("")}
+                    </div>
+                  `}
+                </div>
+              </div>
+            `;
+            return;
+          }
+
+          const renderMsgText = (text) => {
+            return text.split(" ").map(w => {
+              const clean = w.replace(/[^a-zA-Z]/g, "");
+              if (clean.length < 2) return w;
+              return `<span onclick="GaplessApp.inspectWord('${clean}')" class="cursor-pointer hover:bg-ocean-500/20 rounded px-0.5 transition underline decoration-dotted">${w}</span>`;
+            }).join(" ");
+          };
+
+          const messagesHtml = this.state.chatMessages.map(m => {
+            const isMe = m.sender_name === this.state.userName;
+            if (isMe) {
+              return `<div class="flex justify-end mb-2.5"><div class="max-w-[80%] p-3 rounded-2xl rounded-tr-sm bg-ocean-600 text-white text-xs leading-relaxed shadow-sm">${m.text}</div></div>`;
+            } else {
+              return `
+                <div class="flex flex-col mb-2.5">
+                  <span class="text-[10px] text-slate-400 ml-1 mb-0.5 font-bold">${m.sender_name || m.sender || 'User'}</span>
+                  <div class="max-w-[80%] p-3 rounded-2xl rounded-tl-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 shadow-sm">
+                    ${renderMsgText(m.text)}
+                  </div>
+                </div>
+              `;
+            }
+          }).join("");
+
+          root.innerHTML = `
+            <div class="flex flex-col h-[calc(100vh-130px)] fade-in relative">
+              ${topTabsHtml}
+
+              <div id="chat-messages-box" class="flex-1 overflow-y-auto p-4 space-y-2">
+                ${messagesHtml}
+              </div>
+
+              <div id="word-inspect-modal" class="px-3 absolute bottom-16 left-0 right-0 z-20"></div>
+
+              <div class="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 shrink-0">
+                <input id="chat-input-field" type="text" placeholder="${isUk ? 'Напиши повідомлення англійською...' : 'Напиши сообщение на английском...'}" 
+                  onkeydown="if(event.key==='Enter') GaplessApp.sendChatMessage()"
+                  class="flex-1 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs outline-none" />
+                <button onclick="GaplessApp.sendChatMessage()" class="px-4 py-2.5 rounded-xl bg-ocean-600 text-white text-xs font-bold">
+                  ${isUk ? 'Надіслати' : 'Отправить'}
+                </button>
+              </div>
+            </div>
+          `;
+        } 
+        // 5. Профиль
+        else if (tab === "profile") {
+          const stats = GaplessDB.getStatistics(this.state.selectedLevel);
+          root.innerHTML = `
+            <div class="p-5 space-y-4 pb-24 fade-in">
+              <div class="p-6 rounded-3xl bg-gradient-to-br from-ocean-600 to-mint-600 text-white shadow-xl space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs uppercase font-extrabold opacity-80">Gapless Profile</span>
+                  <span class="px-2.5 py-1 rounded-full bg-white/20 text-xs font-bold">${this.state.selectedLevel}</span>
+                </div>
+                <div>
+                  <div class="text-xl font-extrabold">${this.state.userName}</div>
+                  <div class="text-xs opacity-85">${this.state.userEmail}</div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
+                  <div class="text-2xl font-extrabold text-mint-500">${stats.known}</div>
+                  <div class="text-xs text-slate-400 font-semibold mt-1">${isUk ? 'Вивчено слів' : 'Изучено слов'}</div>
+                </div>
+                <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
+                  <div class="text-2xl font-extrabold text-gap-500">${stats.gaps}</div>
+                  <div class="text-xs text-slate-400 font-semibold mt-1">${isUk ? 'Мої прогалини' : 'Мои пробелы'}</div>
+                </div>
+              </div>
+
+              <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                <div class="text-xs font-bold uppercase text-slate-400">${isUk ? 'Мова' : 'Язык'}</div>
+                <div class="flex gap-2">
+                  <button onclick="GaplessApp.state.nativeLang='ru'; GaplessApp.save(); GaplessApp.render();" class="flex-1 py-2 rounded-xl text-xs font-bold ${this.state.nativeLang==='ru' ? 'bg-ocean-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}">RU</button>
+                  <button onclick="GaplessApp.state.nativeLang='uk'; GaplessApp.save(); GaplessApp.render();" class="flex-1 py-2 rounded-xl text-xs font-bold ${this.state.nativeLang==='uk' ? 'bg-ocean-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}">UA</button>
+                </div>
+              </div>
+            </div>
+          `;
+        }
       }
+    };
 
-      renderCurrentModule();
-    }
-
-    bootstrapApp();
+    GaplessApp.init();
   </script>
 </body>
 </html>
