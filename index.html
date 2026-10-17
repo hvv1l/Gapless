@@ -186,6 +186,130 @@
     }
 
     bootstrapApp();
+  <script>
+    function goHomeMenu() {
+      if (!AppState.data.isAuthenticated) {
+        AuthUI.renderAuthScreen();
+        return;
+      }
+      if (!AppState.data.onboardingCompleted) {
+        OnboardingModule.goToStep(1);
+        return;
+      }
+      AppState.data.activeTab = "today";
+      if (window.DashboardModule) {
+        DashboardModule.dailyState = "idle";
+        DashboardModule.activeExercise = null;
+      }
+      AppState.save();
+      renderCurrentModule();
+    }
+
+    function switchAppTab(tabId) {
+      AppState.data.activeTab = tabId;
+      if (window.DashboardModule && tabId === 'exercises') {
+        DashboardModule.activeExercise = null;
+      }
+      AppState.save();
+      renderCurrentModule();
+    }
+
+    function updateNavigationBars() {
+      const nav = document.getElementById("bottom-nav");
+      const logoutBtn = document.getElementById("header-logout-btn");
+      const isUk = AppState.data.nativeLang === "uk";
+
+      if (logoutBtn) {
+        logoutBtn.textContent = isUk ? "Вийти" : "Выйти";
+        if (AppState.data.isAuthenticated) logoutBtn.classList.remove("hidden");
+        else logoutBtn.classList.add("hidden");
+      }
+
+      if (!AppState.data.isAuthenticated || !AppState.data.onboardingCompleted) {
+        nav.classList.add("hidden");
+        return;
+      }
+      nav.classList.remove("hidden");
+
+      const labels = {
+        today: isUk ? "Сьогодні" : "Сегодня",
+        exercises: isUk ? "Вправи" : "Упражнения",
+        chat: isUk ? "Чат" : "Чат",
+        profile: isUk ? "Профіль" : "Профиль"
+      };
+
+      ["today", "exercises", "chat", "profile"].forEach(id => {
+        const btn = document.getElementById(`nav-btn-${id}`);
+        if (!btn) return;
+        btn.textContent = labels[id];
+        btn.className = AppState.data.activeTab === id
+          ? "py-2 rounded-xl text-xs font-extrabold bg-ocean-500/15 text-ocean-600 dark:text-ocean-400 transition"
+          : "py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition";
+      });
+    }
+
+    function renderCurrentModule() {
+      updateNavigationBars();
+
+      if (!AppState.data.isAuthenticated) {
+        AuthUI.renderAuthScreen();
+        return;
+      }
+
+      if (!AppState.data.onboardingCompleted) {
+        OnboardingModule.render();
+        return;
+      }
+
+      const tab = AppState.data.activeTab || "today";
+      if (tab === "chat" && window.ChatModule) {
+        ChatModule.render();
+      } else if (window.DashboardModule) {
+        DashboardModule.render();
+      }
+    }
+
+    // Железобетонная загрузка с принудительной синхронизацией из Supabase
+    async function bootstrapApp() {
+      AppState.init();
+
+      if (window.supabaseClient) {
+        try {
+          const { data: { session } } = await window.supabaseClient.auth.getSession();
+          if (session && session.user) {
+            AppState.data.isAuthenticated = true;
+            
+            // Запрашиваем актуальный профиль из базы Supabase
+            const { data: profile } = await window.supabaseClient
+              .from("profiles")
+              .select("*")
+              .eq("id", session.user.id)
+              .single();
+
+            if (profile) {
+              AppState.data.userName = profile.username || AppState.data.userName;
+              AppState.data.selectedLevel = profile.level || AppState.data.selectedLevel;
+              AppState.data.nativeLang = profile.native_lang || AppState.data.nativeLang;
+              
+              // Жестко берем статус онбординга из базы данных!
+              if (typeof profile.onboarding_completed === "boolean") {
+                AppState.data.onboardingCompleted = profile.onboarding_completed;
+              }
+              if (profile.word_status && Object.keys(profile.word_status).length > 0) {
+                GaplessDB.setCloudWordStatus(profile.word_status);
+              }
+              AppState.save();
+            }
+          }
+        } catch (e) {
+          console.warn("Ошибка синхронизации сессии:", e);
+        }
+      }
+
+      renderCurrentModule();
+    }
+
+    bootstrapApp();
   </script>
 </body>
 </html>
