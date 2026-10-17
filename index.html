@@ -21,7 +21,7 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=700" />
+  <link rel="stylesheet" href="style.css?v=800" />
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center transition-colors duration-300">
 
@@ -58,16 +58,25 @@
   </div>
 
   <!-- ПОДКЛЮЧЕНИЕ ОРИГИНАЛЬНЫХ МОДУЛЕЙ -->
-  <script src="data/vocabulary.js?v=700"></script>
-  <script src="js/db-service.js?v=700"></script>
-  <script src="js/state.js?v=700"></script>
-  <script src="js/auth.js?v=700"></script>
-  <script src="js/auth-ui.js?v=700"></script>
-  <script src="js/onboarding.js?v=700"></script>
-  <script src="js/dashboard.js?v=700"></script>
-  <script src="js/chat.js?v=700"></script>
+  <script src="data/vocabulary.js?v=800"></script>
+  <script src="js/db-service.js?v=800"></script>
+  <script src="js/state.js?v=800"></script>
+  <script src="js/auth.js?v=800"></script>
+  <script src="js/auth-ui.js?v=800"></script>
+  <script src="js/onboarding.js?v=800"></script>
+  <script src="js/dashboard.js?v=800"></script>
+  <script src="js/chat.js?v=800"></script>
 
   <script>
+    // Привязываем все модули к глобальному объекту window, чтобы они видели друг друга из любых файлов
+    if (typeof GaplessDB !== "undefined") window.GaplessDB = GaplessDB;
+    if (typeof AppState !== "undefined") window.AppState = AppState;
+    if (typeof AuthModule !== "undefined") window.AuthModule = AuthModule;
+    if (typeof AuthUI !== "undefined") window.AuthUI = AuthUI;
+    if (typeof OnboardingModule !== "undefined") window.OnboardingModule = OnboardingModule;
+    if (typeof DashboardModule !== "undefined") window.DashboardModule = DashboardModule;
+    if (typeof ChatModule !== "undefined") window.ChatModule = ChatModule;
+
     function goHomeMenu() {
       if (!AppState.data.isAuthenticated) {
         AuthUI.renderAuthScreen();
@@ -78,13 +87,19 @@
         return;
       }
       AppState.data.activeTab = "today";
+      if (typeof DashboardModule !== "undefined") {
+        DashboardModule.activeExercise = null;
+      }
       AppState.save();
       renderCurrentModule();
     }
 
     function switchAppTab(tabId) {
       AppState.data.activeTab = tabId;
-      if (tabId === 'chat' && window.ChatModule && typeof ChatModule.ensureConnected === 'function') {
+      if (typeof DashboardModule !== "undefined" && tabId !== "exercises") {
+        DashboardModule.activeExercise = null;
+      }
+      if (tabId === "chat" && typeof ChatModule !== "undefined") {
         ChatModule.ensureConnected();
       }
       AppState.save();
@@ -102,7 +117,8 @@
         else logoutBtn.classList.add("hidden");
       }
 
-      if (!AppState.data.isAuthenticated) {
+      // Скрываем нижнюю панель навигации, если не вошел ИЛИ еще проходит калибровку
+      if (!AppState.data.isAuthenticated || !AppState.data.onboardingCompleted) {
         if (nav) nav.classList.add("hidden");
         return;
       }
@@ -126,44 +142,46 @@
     }
 
     function renderCurrentModule() {
-      updateNavigationBars();
+      try {
+        updateNavigationBars();
 
-      const rootContainer = document.getElementById("app-root");
-      if (rootContainer) rootContainer.innerHTML = "";
+        const rootContainer = document.getElementById("app-root");
+        if (rootContainer) rootContainer.innerHTML = "";
 
-      // 1. Проверяем авторизацию
-      if (!AppState.data.isAuthenticated) {
-        if (window.AuthUI && typeof AuthUI.renderAuthScreen === "function") {
+        // 1. Экран авторизации
+        if (!AppState.data.isAuthenticated) {
           AuthUI.renderAuthScreen();
+          return;
         }
-        return;
-      }
 
-      // 2. Проверяем онбординг
-      if (!AppState.data.onboardingCompleted) {
-        if (window.OnboardingModule && typeof OnboardingModule.render === "function") {
+        // 2. Экран калибровки (онбординга) после регистрации
+        if (!AppState.data.onboardingCompleted) {
+          if (![1, 2, 3, 4].includes(AppState.data.onboardingStep)) {
+            AppState.data.onboardingStep = 1;
+          }
           OnboardingModule.render();
+          return;
         }
-        return;
-      }
 
-      // 3. Рендерим нужный модуль по вкладке
-      const tab = AppState.data.activeTab || "today";
-
-      if (tab === "chat") {
-        if (window.ChatModule && typeof ChatModule.render === "function") {
+        // 3. Главные вкладки приложения
+        const tab = AppState.data.activeTab || "today";
+        if (tab === "chat") {
           ChatModule.render();
-        }
-      } else {
-        if (window.DashboardModule && typeof DashboardModule.render === "function") {
+        } else {
           DashboardModule.render();
         }
+      } catch (err) {
+        console.error("Ошибка рендера:", err);
       }
     }
 
+    window.renderCurrentModule = renderCurrentModule;
+    window.switchAppTab = switchAppTab;
+    window.goHomeMenu = goHomeMenu;
+
     async function bootstrapApp() {
       AppState.init();
-      if (window.supabaseClient && window.AuthModule) {
+      if (window.supabaseClient && typeof AuthModule !== "undefined") {
         try {
           const { data: { session } } = await window.supabaseClient.auth.getSession();
           if (session && session.user) {
@@ -174,10 +192,7 @@
       renderCurrentModule();
     }
 
-    // Запускаем приложение после полной загрузки всех скриптов
-    window.addEventListener("DOMContentLoaded", () => {
-      bootstrapApp();
-    });
+    window.addEventListener("DOMContentLoaded", bootstrapApp);
   </script>
 </body>
 </html>
