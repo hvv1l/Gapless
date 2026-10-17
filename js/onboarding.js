@@ -1,6 +1,6 @@
 // ============================================================================
 // ФАЙЛ: js/onboarding.js
-// Модуль 1: Приветствие, выбор уровня, отсев слов и завершение калибровки
+// Модуль онбординга с исправленным переходом после сохранения профиля
 // ============================================================================
 
 const ONBOARDING_I18N = {
@@ -159,7 +159,7 @@ const OnboardingModule = {
     this.render();
   },
 
-  // Завершение онбординга с сохранением в облако Supabase
+  // Жесткое сохранение онбординга и немедленный переход в Главное меню
   finishOnboarding() {
     const nameInput = document.getElementById("onb-name-input");
     const emailInput = document.getElementById("onb-email-input");
@@ -174,14 +174,17 @@ const OnboardingModule = {
     AppState.data.activeTab = "today";
     AppState.save();
 
-    // Принудительно сохраняем флаг онбординга и имя в Supabase
     if (window.AuthModule && window.AuthModule.saveProgressToCloud) {
       window.AuthModule.saveProgressToCloud();
     }
 
     showToast("✓ Профиль сохранен!");
+
+    // Сразу принудительно переключаем на главный экран
     if (window.renderCurrentModule) {
       window.renderCurrentModule();
+    } else {
+      window.location.reload();
     }
   },
 
@@ -208,7 +211,6 @@ const OnboardingModule = {
       </div>
     `;
 
-    // ШАГ 1
     if (step === 1) {
       container.innerHTML = `
         ${stepsHeaderHtml}
@@ -262,7 +264,6 @@ const OnboardingModule = {
       return;
     }
 
-    // ШАГ 2
     if (step === 2) {
       const selectedLvl = AppState.data.selectedLevel;
       const neighbors = GaplessDB.getTargetAndNeighborLevels(selectedLvl);
@@ -314,7 +315,6 @@ const OnboardingModule = {
       return;
     }
 
-    // ШАГ 3
     if (step === 3) {
       const selectedLvl = AppState.data.selectedLevel;
       const catFilter = AppState.data.categoryFilter;
@@ -462,7 +462,6 @@ const OnboardingModule = {
       return;
     }
 
-    // ШАГ 4
     if (step === 4) {
       const selectedLvl = AppState.data.selectedLevel;
       const stats = GaplessDB.getStatistics(selectedLvl);
@@ -470,7 +469,7 @@ const OnboardingModule = {
 
       container.innerHTML = `
         ${stepsHeaderHtml}
-        <div class="p-6 flex-1 flex flex-col justify-between fade-in pb-20">
+        <div class="p-6 flex-1 flex flex-col justify-between fade-in pb-10">
           <div>
             <div class="p-5 rounded-3xl bg-gradient-to-br from-ocean-600 to-mint-600 text-white shadow-xl mb-5">
               <div class="text-xs uppercase tracking-wider opacity-85 font-bold mb-1">${i18n.step4Badge}</div>
