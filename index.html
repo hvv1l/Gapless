@@ -6,6 +6,7 @@
   <title>Gapless</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230EA5E9'/%3E%3Cstop offset='100%25' stop-color='%2310B981'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Inter, Arial, sans-serif' font-weight='800' font-size='38'%3EG%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Официальная библиотека Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     tailwind.config = {
@@ -21,29 +22,36 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=400" />
+  <link rel="stylesheet" href="style.css?v=401" />
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center transition-colors duration-300">
 
   <div class="w-full max-w-md min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl relative overflow-x-hidden border-x border-slate-200/70 dark:border-slate-800/80">
 
-    <!-- Шапка -->
+    <!-- Верхняя шапка -->
     <header class="sticky top-0 z-30 backdrop-blur-md bg-white/85 dark:bg-slate-900/85 border-b border-slate-200 dark:border-slate-800 px-5 py-3.5 flex items-center justify-between">
       <button onclick="goHomeMenu()" class="flex items-center gap-2.5 text-left hover:opacity-80 transition" title="На главное меню">
-        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-ocean-500 to-mint-500 flex items-center justify-center text-white font-extrabold text-base shadow-sm">G</div>
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-ocean-500 to-mint-500 flex items-center justify-center text-white font-extrabold text-base shadow-sm">
+          G
+        </div>
         <span class="font-extrabold tracking-tight text-base">Gapless</span>
       </button>
 
       <div class="flex items-center gap-2">
-        <button id="header-logout-btn" onclick="AuthModule.signOut()" class="hidden px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 hover:text-red-500 transition">Выйти</button>
-        <button onclick="AppState.toggleTheme()" id="header-theme-btn" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm">🌙</button>
+        <button id="header-logout-btn" onclick="AuthModule.signOut()" class="hidden px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 hover:text-red-500 transition">
+          Выйти
+        </button>
+        <button onclick="AppState.toggleTheme()" id="header-theme-btn"
+          class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm hover:opacity-80 transition">
+          🌙
+        </button>
       </div>
     </header>
 
-    <!-- Основной контейнер экрана -->
+    <!-- Контейнер активного экрана -->
     <main id="app-root" class="flex-1 flex flex-col"></main>
 
-    <!-- Нижнее меню -->
+    <!-- Нижнее меню навигации -->
     <nav id="bottom-nav" class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md backdrop-blur-lg bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 px-3 py-2 z-30">
       <div class="grid grid-cols-4 gap-1 text-center">
         <button onclick="switchAppTab('today')" id="nav-btn-today" class="py-2 rounded-xl text-xs font-bold transition">Сегодня</button>
@@ -53,19 +61,22 @@
       </div>
     </nav>
 
-    <!-- Уведомления -->
-    <div id="app-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-300 bg-slate-900/95 dark:bg-white/95 text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-semibold shadow-xl"></div>
+    <!-- Всплывающее уведомление -->
+    <div id="app-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-300 bg-slate-900/95 dark:bg-white/95 text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-semibold shadow-xl">
+      Уведомление
+    </div>
+
   </div>
 
-  <!-- ПОДКЛЮЧЕНИЕ ВСЕХ МОДУЛЕЙ С ПРАВИЛЬНОЙ ПОСЛЕДОВАТЕЛЬНОСТЬЮ -->
-  <script src="data/vocabulary.js?v=400"></script>
-  <script src="js/db-service.js?v=400"></script>
-  <script src="js/state.js?v=400"></script>
-  <script src="js/auth.js?v=400"></script>
-  <script src="js/auth-ui.js?v=400"></script>
-  <script src="js/onboarding.js?v=400"></script>
-  <script src="js/dashboard.js?v=400"></script>
-  <script src="js/chat.js?v=400"></script>
+  <!-- ПОДКЛЮЧЕНИЕ ВСЕХ МОДУЛЕЙ -->
+  <script src="data/vocabulary.js?v=401"></script>
+  <script src="js/db-service.js?v=401"></script>
+  <script src="js/state.js?v=401"></script>
+  <script src="js/auth.js?v=401"></script>
+  <script src="js/auth-ui.js?v=401"></script>
+  <script src="js/onboarding.js?v=401"></script>
+  <script src="js/dashboard.js?v=401"></script>
+  <script src="js/chat.js?v=401"></script>
 
   <script>
     function goHomeMenu() {
@@ -135,6 +146,11 @@
     function renderCurrentModule() {
       updateNavigationBars();
 
+      const rootContainer = document.getElementById("app-root");
+      if (rootContainer) {
+        rootContainer.innerHTML = ""; // Полная очистка перед рендером любого экрана
+      }
+
       if (!AppState.data.isAuthenticated) {
         AuthUI.renderAuthScreen();
         return;
@@ -150,6 +166,15 @@
         ChatModule.render();
       } else if (window.DashboardModule) {
         DashboardModule.render();
+      } else if (rootContainer) {
+        rootContainer.innerHTML = `
+          <div class="p-5 space-y-4 pb-24 fade-in">
+            <div class="p-6 rounded-3xl bg-gradient-to-br from-ocean-500 to-mint-500 text-white shadow-xl space-y-3">
+              <h2 class="text-2xl font-extrabold">Привет, ${AppState.data.userName || 'Alex'}!</h2>
+              <p class="text-xs opacity-90">Твоя ежедневная база слов готова.</p>
+            </div>
+          </div>
+        `;
       }
     }
 
