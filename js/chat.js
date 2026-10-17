@@ -4,8 +4,8 @@
 // ============================================================================
 
 // 🔑 ВСТАВЬ СВОИ ДАННЫЕ ИЗ SUPABASE PROJECT SETTINGS ЗДЕСЬ (если уже создал проект):
-const SUPABASE_URL = "https://ТВОЙ_ПРОЕКТ.supabase.co";
-const SUPABASE_ANON_KEY = "ТВОЙ_ANON_PUBLIC_KEY";
+const SUPABASE_URL = "https://nmlaqvrfxsksuwbjusjh.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbGFxdnJmeHNrc3V3Ymp1c2poIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxODYzNzUsImV4cCI6MjEwNzc2MjM3NX0._26CSKgxQ7R3rvF6eTiesNtOumPQC5bCVa9RW6VLZEk";
 
 // Инициализируем клиент только если вставлены реальные ключи
 window.supabaseClient = (
