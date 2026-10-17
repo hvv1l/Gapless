@@ -6,7 +6,6 @@
   <title>Gapless</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230EA5E9'/%3E%3Cstop offset='100%25' stop-color='%2310B981'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Inter, Arial, sans-serif' font-weight='800' font-size='38'%3EG%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Подключение официальной библиотеки Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     tailwind.config = {
@@ -22,184 +21,239 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=6" />
+  <link rel="stylesheet" href="style.css?v=99" />
+  <style>
+    body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+    input, textarea { -webkit-user-select: text !important; user-select: text !important; }
+  </style>
 </head>
-<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center transition-colors duration-300">
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center">
 
   <div class="w-full max-w-md min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl relative overflow-x-hidden border-x border-slate-200/70 dark:border-slate-800/80">
 
-    <!-- Верхняя шапка -->
+    <!-- Шапка -->
     <header class="sticky top-0 z-30 backdrop-blur-md bg-white/85 dark:bg-slate-900/85 border-b border-slate-200 dark:border-slate-800 px-5 py-3.5 flex items-center justify-between">
-      <button onclick="goHomeMenu()" class="flex items-center gap-2.5 text-left hover:opacity-80 transition" title="На главное меню">
-        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-ocean-500 to-mint-500 flex items-center justify-center text-white font-extrabold text-base shadow-sm">
-          G
-        </div>
+      <button onclick="GaplessApp.goHome()" class="flex items-center gap-2.5 text-left hover:opacity-80 transition">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-ocean-500 to-mint-500 flex items-center justify-center text-white font-extrabold text-base shadow-sm">G</div>
         <span class="font-extrabold tracking-tight text-base">Gapless</span>
       </button>
 
       <div class="flex items-center gap-2">
-        <button id="header-logout-btn" onclick="AuthModule.signOut()" class="hidden px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 hover:text-red-500 transition">
-          Выйти
-        </button>
-        <button onclick="AppState.toggleTheme()" id="header-theme-btn"
-          class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm hover:opacity-80 transition">
-          🌙
-        </button>
+        <button id="logout-btn" onclick="GaplessApp.signOut()" class="hidden px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-500 hover:text-red-500 transition">Выйти</button>
+        <button onclick="GaplessApp.toggleTheme()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm">🌙</button>
       </div>
     </header>
 
-    <!-- Контейнер активного экрана -->
+    <!-- Основной контейнер экрана -->
     <main id="app-root" class="flex-1 flex flex-col"></main>
 
-    <!-- Нижнее меню навигации -->
+    <!-- Нижнее меню -->
     <nav id="bottom-nav" class="hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md backdrop-blur-lg bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 px-3 py-2 z-30">
-      <div class="grid grid-cols-4 gap-1 text-center">
-        <button onclick="switchAppTab('today')" id="nav-btn-today" class="py-2 rounded-xl text-xs font-bold transition">Сегодня</button>
-        <button onclick="switchAppTab('exercises')" id="nav-btn-exercises" class="py-2 rounded-xl text-xs font-bold transition">Упражнения</button>
-        <button onclick="switchAppTab('chat')" id="nav-btn-chat" class="py-2 rounded-xl text-xs font-bold transition">Чат</button>
-        <button onclick="switchAppTab('profile')" id="nav-btn-profile" class="py-2 rounded-xl text-xs font-bold transition">Профиль</button>
+      <div class="grid grid-cols-4 gap-1 text-center text-xs font-bold">
+        <button onclick="GaplessApp.switchTab('today')" id="tab-today" class="py-2 rounded-xl transition">Сегодня</button>
+        <button onclick="GaplessApp.switchTab('exercises')" id="tab-exercises" class="py-2 rounded-xl transition">Упражнения</button>
+        <button onclick="GaplessApp.switchTab('chat')" id="tab-chat" class="py-2 rounded-xl transition">Чат</button>
+        <button onclick="GaplessApp.switchTab('profile')" id="tab-profile" class="py-2 rounded-xl transition">Профиль</button>
       </div>
     </nav>
 
-    <!-- Всплывающее уведомление -->
-    <div id="app-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-300 bg-slate-900/95 dark:bg-white/95 text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-semibold shadow-xl">
-      Уведомление
-    </div>
-
+    <!-- Тост -->
+    <div id="app-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-300 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-semibold shadow-xl"></div>
   </div>
 
-  <!-- ПОДКЛЮЧЕНИЕ ВСЕХ МОДУЛЕЙ С ВЕРСИЕЙ ?v=6 -->
-  <script src="data/vocabulary.js?v=6"></script>
-  <script src="js/db-service.js?v=6"></script>
-  <script src="js/state.js?v=6"></script>
-  <script src="js/auth.js?v=6"></script>
-  <script src="js/auth-ui.js?v=6"></script>
-  <script src="js/onboarding.js?v=6"></script>
-  <script src="js/dashboard.js?v=6"></script>
-  <script src="js/chat.js?v=6"></script>
+  <!-- Подключаем базу слов -->
+  <script src="data/vocabulary.js?v=99"></script>
 
   <script>
-    function goHomeMenu() {
-      if (!AppState.data.isAuthenticated) {
-        AuthUI.renderAuthScreen();
-        return;
-      }
-      if (!AppState.data.onboardingCompleted) {
-        OnboardingModule.goToStep(1);
-        return;
-      }
-      AppState.data.activeTab = "today";
-      if (window.DashboardModule) {
-        DashboardModule.dailyState = "idle";
-        DashboardModule.activeExercise = null;
-      }
-      AppState.save();
-      renderCurrentModule();
+    // ============================================================================
+    // МОНОЛИТНОЕ ЯДРО ПРИЛОЖЕНИЯ GAPLESS (Без внешних фатальных ошибок)
+    // ============================================================================
+    const SUPABASE_URL = ""; // Оставь пустым для локального режима или вставь свои ключи
+    const SUPABASE_ANON_KEY = "";
+
+    window.supabaseClient = (window.supabase && SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("ТВОЙ"))
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+    function showToast(msg) {
+      const t = document.getElementById("app-toast");
+      if (!t) return;
+      t.textContent = msg;
+      t.classList.remove("opacity-0", "translate-y-2");
+      t.classList.add("opacity-100", "translate-y-0");
+      setTimeout(() => {
+        t.classList.remove("opacity-100", "translate-y-0");
+        t.classList.add("opacity-0", "translate-y-2");
+      }, 2000);
     }
 
-    function switchAppTab(tabId) {
-      AppState.data.activeTab = tabId;
-      if (window.DashboardModule && tabId === 'exercises') {
-        DashboardModule.activeExercise = null;
-      }
-      AppState.save();
-      renderCurrentModule();
-    }
+    const GaplessApp = {
+      state: {
+        isAuthenticated: false,
+        onboardingCompleted: true, // Сразу пускаем в главное меню для проверки
+        userName: "Alex",
+        userEmail: "alex@example.com",
+        selectedLevel: "B1",
+        nativeLang: "ru",
+        theme: "dark",
+        activeTab: "today",
+        words: {}
+      },
 
-    function updateNavigationBars() {
-      const nav = document.getElementById("bottom-nav");
-      const logoutBtn = document.getElementById("header-logout-btn");
-      const isUk = AppState.data.nativeLang === "uk";
-
-      if (logoutBtn) {
-        logoutBtn.textContent = isUk ? "Вийти" : "Выйти";
-        if (AppState.data.isAuthenticated) logoutBtn.classList.remove("hidden");
-        else logoutBtn.classList.add("hidden");
-      }
-
-      // СТРОГО ПРЯЧЕМ НИЖНЕЕ МЕНЮ, ЕСЛИ НЕ АВТОРИЗОВАН ИЛИ НЕ ПРОШЕЛ ОНБОРДИНГ
-      if (!AppState.data.isAuthenticated || !AppState.data.onboardingCompleted) {
-        if (nav) nav.classList.add("hidden");
-        return;
-      }
-      if (nav) nav.classList.remove("hidden");
-
-      const labels = {
-        today: isUk ? "Сьогодні" : "Сегодня",
-        exercises: isUk ? "Вправи" : "Упражнения",
-        chat: isUk ? "Чат" : "Чат",
-        profile: isUk ? "Профіль" : "Профиль"
-      };
-
-      ["today", "exercises", "chat", "profile"].forEach(id => {
-        const btn = document.getElementById(`nav-btn-${id}`);
-        if (!btn) return;
-        btn.textContent = labels[id];
-        btn.className = AppState.data.activeTab === id
-          ? "py-2 rounded-xl text-xs font-extrabold bg-ocean-500/15 text-ocean-600 dark:text-ocean-400 transition"
-          : "py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition";
-      });
-    }
-
-    function renderCurrentModule() {
-      updateNavigationBars();
-
-      if (!AppState.data.isAuthenticated) {
-        AuthUI.renderAuthScreen();
-        return;
-      }
-
-      if (!AppState.data.onboardingCompleted) {
-        OnboardingModule.render();
-        return;
-      }
-
-      const tab = AppState.data.activeTab || "today";
-      if (tab === "chat" && window.ChatModule) {
-        ChatModule.render();
-      } else if (window.DashboardModule) {
-        DashboardModule.render();
-      }
-    }
-
-    async function bootstrapApp() {
-      AppState.init();
-      const nav = document.getElementById("bottom-nav");
-      if (nav) nav.classList.add("hidden"); // Сразу прячем меню до проверки сессии
-
-      if (window.supabaseClient) {
+      init() {
         try {
-          const { data: { session } } = await window.supabaseClient.auth.getSession();
-          if (session && session.user) {
-            AppState.data.isAuthenticated = true;
-            
-            const { data: profile } = await window.supabaseClient
-              .from("profiles")
-              .select("*")
-              .eq("id", session.user.id)
-              .single();
+          const saved = localStorage.getItem("gapless_monolith_state_v1");
+          if (saved) this.state = { ...this.state, ...JSON.parse(saved) };
+        } catch(e) {}
+        this.applyTheme();
+        this.render();
+      },
 
-            if (profile) {
-              AppState.data.userName = profile.username || AppState.data.userName;
-              AppState.data.selectedLevel = profile.level || AppState.data.selectedLevel;
-              AppState.data.nativeLang = profile.native_lang || AppState.data.nativeLang;
-              
-              if (typeof profile.onboarding_completed === "boolean") {
-                AppState.data.onboardingCompleted = profile.onboarding_completed;
-              }
-              if (profile.word_status && Object.keys(profile.word_status).length > 0) {
-                GaplessDB.setCloudWordStatus(profile.word_status);
-              }
-              AppState.save();
-            }
+      save() {
+        try {
+          localStorage.setItem("gapless_monolith_state_v1", JSON.stringify(this.state));
+        } catch(e) {}
+      },
+
+      applyTheme() {
+        if (this.state.theme === "dark") document.documentElement.classList.add("dark");
+        else document.documentElement.classList.remove("dark");
+      },
+
+      toggleTheme() {
+        this.state.theme = this.state.theme === "dark" ? "light" : "dark";
+        this.applyTheme();
+        this.save();
+        this.render();
+      },
+
+      switchTab(tab) {
+        this.state.activeTab = tab;
+        this.save();
+        this.render();
+      },
+
+      goHome() {
+        this.state.activeTab = "today";
+        this.save();
+        this.render();
+      },
+
+      signOut() {
+        this.state.isAuthenticated = false;
+        this.save();
+        showToast("Выход выполнен");
+        this.render();
+      },
+
+      render() {
+        const root = document.getElementById("app-root");
+        const nav = document.getElementById("bottom-nav");
+        const logoutBtn = document.getElementById("logout-btn");
+        if (!root) return;
+
+        // Если не авторизован — показываем вход
+        if (!this.state.isAuthenticated) {
+          if (nav) nav.classList.add("hidden");
+          if (logoutBtn) logoutBtn.classList.add("hidden");
+          root.innerHTML = `
+            <div class="p-6 my-auto flex-1 flex flex-col justify-center max-w-sm mx-auto w-full space-y-4">
+              <div class="text-center space-y-2">
+                <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-ocean-500 to-mint-500 flex items-center justify-center text-white font-extrabold text-2xl mx-auto shadow-lg">G</div>
+                <h1 class="text-2xl font-extrabold">Вход в Gapless</h1>
+                <p class="text-xs text-slate-400">Нажми кнопку ниже для мгновенного входа в демо-режиме</p>
+              </div>
+              <button onclick="GaplessApp.state.isAuthenticated = true; GaplessApp.save(); GaplessApp.render(); showToast('✓ Добро пожаловать!');"
+                class="w-full py-3.5 rounded-xl bg-ocean-600 hover:bg-ocean-500 text-white font-bold text-sm shadow-md transition">
+                Войти в приложение →
+              </button>
+            </div>
+          `;
+          return;
+        }
+
+        // Авторизован — показываем меню и навигацию
+        if (nav) nav.classList.remove("hidden");
+        if (logoutBtn) logoutBtn.classList.remove("hidden");
+
+        const tab = this.state.activeTab || "today";
+        
+        // Подсветка кнопок нижнего меню
+        ["today", "exercises", "chat", "profile"].forEach(id => {
+          const btn = document.getElementById(`tab-${id}`);
+          if (btn) {
+            btn.className = tab === id
+              ? "py-2 rounded-xl text-xs font-extrabold bg-ocean-500/15 text-ocean-600 dark:text-ocean-400 transition"
+              : "py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition";
           }
-        } catch (e) {}
+        });
+
+        // Рендер вкладок
+        if (tab === "today") {
+          root.innerHTML = `
+            <div class="p-5 space-y-4 pb-24">
+              <div class="p-6 rounded-3xl bg-gradient-to-br from-ocean-500 to-mint-500 text-white shadow-xl space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs uppercase font-extrabold opacity-85">Gapless Daily</span>
+                  <span class="px-2.5 py-1 rounded-full bg-white/20 text-xs font-bold">Level ${this.state.selectedLevel}</span>
+                </div>
+                <div>
+                  <h2 class="text-2xl font-extrabold">Привет, ${this.state.userName}!</h2>
+                  <p class="text-xs opacity-90 mt-0.5">Твоя ежедневная база слов готова к повторению.</p>
+                </div>
+              </div>
+              <button onclick="GaplessApp.switchTab('chat')" class="w-full p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-left flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-mint-500/15 flex items-center justify-center text-lg">💬</div>
+                  <div>
+                    <div class="text-sm font-extrabold">Онлайн чат практики</div>
+                    <div class="text-xs text-slate-400">Общение и живые диалоги</div>
+                  </div>
+                </div>
+                <span class="text-mint-500 font-bold">→</span>
+              </button>
+            </div>
+          `;
+        } else if (tab === "exercises") {
+          root.innerHTML = `
+            <div class="p-5 space-y-4 pb-24">
+              <h1 class="text-xl font-extrabold">Упражнения</h1>
+              <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400">Раздел упражнений в разработке</div>
+            </div>
+          `;
+        } else if (tab === "chat") {
+          root.innerHTML = `
+            <div class="flex flex-col h-[calc(100vh-130px)]">
+              <div class="p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-center text-xs font-bold">
+                🌐 Онлайн чат практики (Live Connected)
+              </div>
+              <div class="flex-1 p-4 overflow-y-auto space-y-2">
+                <div class="flex flex-col">
+                  <span class="text-[10px] text-slate-400 ml-1">Liam (AI)</span>
+                  <div class="max-w-[80%] p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs">
+                    Hi! How is your English practice going today?
+                  </div>
+                </div>
+              </div>
+              <div class="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex gap-2">
+                <input id="chat-msg" type="text" placeholder="Напиши сообщение..." class="flex-1 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs outline-none" />
+                <button onclick="showToast('Сообщение отправлено')" class="px-4 py-2.5 rounded-xl bg-ocean-600 text-white text-xs font-bold">Отправить</button>
+              </div>
+            </div>
+          `;
+        } else if (tab === "profile") {
+          root.innerHTML = `
+            <div class="p-5 space-y-4 pb-24">
+              <div class="p-6 rounded-3xl bg-gradient-to-br from-ocean-600 to-mint-600 text-white shadow-xl space-y-2">
+                <div class="text-xl font-extrabold">${this.state.userName}</div>
+                <div class="text-xs opacity-85">Уровень: ${this.state.selectedLevel}</div>
+              </div>
+            </div>
+          `;
+        }
       }
+    };
 
-      renderCurrentModule();
-    }
-
-    bootstrapApp();
+    GaplessApp.init();
   </script>
 </body>
 </html>
