@@ -168,8 +168,23 @@ const AuthModule = {
 
       if (data && data.user) {
         GaplessDB.clearLocalStatus();
+        
+        // Сразу фиксируем авторизацию локально для мгновенного переключения экрана
+        AppState.data.isAuthenticated = true;
+        AppState.data.userEmail = data.user.email;
+        AppState.data.userName = data.user.user_metadata?.username || data.user.email.split("@")[0];
+        AppState.save();
+
+        // Синхронизируем профиль с базой в фоне
         await this.syncProfileFromSession(data.user);
+        
         showToast("✓ Вход выполнен!");
+
+        if (window.renderCurrentModule) {
+          window.renderCurrentModule();
+        } else {
+          window.location.reload();
+        }
         return true;
       }
     } catch (e) {
