@@ -175,8 +175,8 @@ const OnboardingModule = {
 
     showToast("💾 Сохранение в облако...");
 
-    if (window.AuthModule && window.AuthModule.saveProgressToCloud) {
-      await window.AuthModule.saveProgressToCloud(); // Ждем завершения записи в БД
+    if (typeof AuthModule !== "undefined" && AuthModule.saveProgressToCloud) {
+      await AuthModule.saveProgressToCloud();
     }
 
     showToast("✓ Профиль сохранен!");
@@ -192,8 +192,11 @@ const OnboardingModule = {
     const container = document.getElementById("app-root");
     if (!container) return;
 
-    const step = AppState.data.onboardingStep;
-    const lang = AppState.data.nativeLang;
+    // Надежная страховка шага: если значение сбилось, всегда ставим Шаг 1
+    const step = [1, 2, 3, 4].includes(AppState.data.onboardingStep) ? AppState.data.onboardingStep : 1;
+    AppState.data.onboardingStep = step;
+
+    const lang = AppState.data.nativeLang === "uk" ? "uk" : "ru";
     const isDark = AppState.data.theme === "dark";
     const i18n = this.t();
 
@@ -265,7 +268,7 @@ const OnboardingModule = {
     }
 
     if (step === 2) {
-      const selectedLvl = AppState.data.selectedLevel;
+      const selectedLvl = AppState.data.selectedLevel || "B1";
       const neighbors = GaplessDB.getTargetAndNeighborLevels(selectedLvl);
 
       const levelsHtml = GAPLESS_RAW_DB.levelsOrder.map(lvlId => {
@@ -316,8 +319,8 @@ const OnboardingModule = {
     }
 
     if (step === 3) {
-      const selectedLvl = AppState.data.selectedLevel;
-      const catFilter = AppState.data.categoryFilter;
+      const selectedLvl = AppState.data.selectedLevel || "B1";
+      const catFilter = AppState.data.categoryFilter || "all";
       const clusters = GaplessDB.getClustersForCalibration(selectedLvl, catFilter);
       const stats = GaplessDB.getStatistics(selectedLvl);
       const neighbors = GaplessDB.getTargetAndNeighborLevels(selectedLvl);
@@ -463,7 +466,7 @@ const OnboardingModule = {
     }
 
     if (step === 4) {
-      const selectedLvl = AppState.data.selectedLevel;
+      const selectedLvl = AppState.data.selectedLevel || "B1";
       const stats = GaplessDB.getStatistics(selectedLvl);
       const gapWords = GaplessDB.getUserGapWords(selectedLvl);
 
@@ -518,3 +521,5 @@ const OnboardingModule = {
     }
   }
 };
+
+window.OnboardingModule = OnboardingModule;
