@@ -22,7 +22,7 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=401" />
+  <link rel="stylesheet" href="style.css?v=500" />
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center transition-colors duration-300">
 
@@ -68,15 +68,15 @@
 
   </div>
 
-  <!-- ПОДКЛЮЧЕНИЕ ВСЕХ МОДУЛЕЙ -->
-  <script src="data/vocabulary.js?v=401"></script>
-  <script src="js/db-service.js?v=401"></script>
-  <script src="js/state.js?v=401"></script>
-  <script src="js/auth.js?v=401"></script>
-  <script src="js/auth-ui.js?v=401"></script>
-  <script src="js/onboarding.js?v=401"></script>
-  <script src="js/dashboard.js?v=401"></script>
-  <script src="js/chat.js?v=401"></script>
+  <!-- ПОДКЛЮЧЕНИЕ ВСЕХ МОДУЛЕЙ С ВЕРСИЕЙ ?v=500 -->
+  <script src="data/vocabulary.js?v=500"></script>
+  <script src="js/db-service.js?v=500"></script>
+  <script src="js/state.js?v=500"></script>
+  <script src="js/auth.js?v=500"></script>
+  <script src="js/auth-ui.js?v=500"></script>
+  <script src="js/onboarding.js?v=500"></script>
+  <script src="js/dashboard.js?v=500"></script>
+  <script src="js/chat.js?v=500"></script>
 
   <script>
     function goHomeMenu() {
@@ -90,7 +90,6 @@
       }
       AppState.data.activeTab = "today";
       if (window.DashboardModule) {
-        DashboardModule.dailyState = "idle";
         DashboardModule.activeExercise = null;
       }
       AppState.save();
@@ -148,7 +147,7 @@
 
       const rootContainer = document.getElementById("app-root");
       if (rootContainer) {
-        rootContainer.innerHTML = ""; // Полная очистка перед рендером любого экрана
+        rootContainer.innerHTML = ""; // Очищаем контейнер перед рендером
       }
 
       if (!AppState.data.isAuthenticated) {
@@ -157,24 +156,26 @@
       }
 
       if (!AppState.data.onboardingCompleted) {
-        OnboardingModule.render();
-        return;
+        if (AppState.data.userName && AppState.data.userName !== "Alex") {
+          AppState.data.onboardingCompleted = true;
+          AppState.save();
+        } else {
+          OnboardingModule.render();
+          return;
+        }
       }
 
       const tab = AppState.data.activeTab || "today";
-      if (tab === "chat" && window.ChatModule) {
-        ChatModule.render();
-      } else if (window.DashboardModule) {
-        DashboardModule.render();
-      } else if (rootContainer) {
-        rootContainer.innerHTML = `
-          <div class="p-5 space-y-4 pb-24 fade-in">
-            <div class="p-6 rounded-3xl bg-gradient-to-br from-ocean-500 to-mint-500 text-white shadow-xl space-y-3">
-              <h2 class="text-2xl font-extrabold">Привет, ${AppState.data.userName || 'Alex'}!</h2>
-              <p class="text-xs opacity-90">Твоя ежедневная база слов готова.</p>
-            </div>
-          </div>
-        `;
+
+      // Четкое переключение между модулями в зависимости от активной вкладки
+      if (tab === "chat") {
+        if (window.ChatModule) {
+          ChatModule.render();
+        }
+      } else {
+        if (window.DashboardModule) {
+          DashboardModule.render();
+        }
       }
     }
 
