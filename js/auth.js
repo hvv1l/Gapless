@@ -1,5 +1,6 @@
 // ============================================================================
 // ФАЙЛ: js/auth.js
+// Авторизация Supabase + синхронизация профиля, логина (username) и списка друзей
 // ============================================================================
 
 const SUPABASE_URL = "https://nmlaqvrfxsksuwbjusjh.supabase.co";
@@ -52,7 +53,10 @@ const AuthModule = {
           if (profile.username) username = profile.username;
           if (profile.level) AppState.data.selectedLevel = profile.level;
           if (profile.native_lang) AppState.data.nativeLang = profile.native_lang;
-          
+          if (Array.isArray(profile.friends_list)) {
+            AppState.data.friendsList = profile.friends_list;
+          }
+
           if (typeof profile.onboarding_completed === "boolean") {
             AppState.data.onboardingCompleted = profile.onboarding_completed;
           }
@@ -60,6 +64,28 @@ const AuthModule = {
           if (profile.word_status && Object.keys(profile.word_status).length > 0) {
             GaplessDB.setCloudWordStatus(profile.word_status);
           }
+
+          // Если в профиле БД еще не сохранен username, сразу дозаписываем его
+          if (!profile.username && username) {
+            await window.supabaseClient
+              .from("profiles")
+              .update({ username: username })
+              .eq("id", user.id);
+          }
+        } else {
+          // Если строки в таблице profiles еще нет — создаем её, чтобы пользователя можно было найти по логину
+          await window.supabaseClient
+            .from("profiles")
+            .upsert({
+              id: user.id,
+              username: username,
+              level: AppState.data.selectedLevel || "B1",
+              native_lang: AppState.data.nativeLang || "ru",
+              onboarding_completed: !!AppState.data.onboardingCompleted,
+              word_status: GaplessDB.userWordStatus || {},
+              friends_list: AppState.data.friendsList || [],
+              updated_at: new Date().toISOString()
+            });
         }
       } catch (e) {}
     }
@@ -74,16 +100,23 @@ const AuthModule = {
     if (!window.supabaseClient || !this.currentUserId) return;
 
     try {
+      const payload = {
+        id: this.currentUserId,
+        level: AppState.data.selectedLevel || "B1",
+        native_lang: AppState.data.nativeLang || "ru",
+        onboarding_completed: !!AppState.data.onboardingCompleted,
+        word_status: GaplessDB.userWordStatus || {},
+        friends_list: Array.isArray(AppState.data.friendsList) ? AppState.data.friendsList : [],
+        updated_at: new Date().toISOString()
+      };
+
+      if (AppState.data.userName && AppState.data.userName.trim()) {
+        payload.username = AppState.data.userName.trim();
+      }
+
       await window.supabaseClient
         .from("profiles")
-        .update({
-          level: AppState.data.selectedLevel || "B1",
-          native_lang: AppState.data.nativeLang || "ru",
-          onboarding_completed: !!AppState.data.onboardingCompleted,
-          word_status: GaplessDB.userWordStatus || {},
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", this.currentUserId);
+        .upsert(payload);
     } catch (e) {
       console.warn("Ошибка сохранения в облако:", e);
     }
@@ -91,19 +124,33 @@ const AuthModule = {
 
   async signUp(email, password, username) {
     const cleanEmail = email.toLowerCase().trim();
+    const cleanUsername = username.trim();
+
     if (!window.supabaseClient) {
       showToast("Вставь ключи Supabase в js/auth.js");
       return { status: "error" };
     }
 
     try {
+      // Проверяем, не занят ли такой логин в таблице profiles
+      const { data: existingUser } = await window.supabaseClient
+        .from("profiles")
+        .select("id")
+        .ilike("username", cleanUsername)
+        .limit(1);
+
+      if (existingUser && existingUser.length > 0) {
+        showToast("Этот никнейм уже занят, выбери другой");
+        return { status: "error" };
+      }
+
       const redirectUrl = window.location.origin + window.location.pathname;
       const { data, error } = await window.supabaseClient.auth.signUp({
         email: cleanEmail,
         password: password,
         options: {
           emailRedirectTo: redirectUrl,
-          data: { username: username, level: AppState.data.selectedLevel || "B1" }
+          data: { username: cleanUsername, level: AppState.data.selectedLevel || "B1" }
         }
       });
 
@@ -134,80 +181,4 @@ const AuthModule = {
   async resendConfirmation(email) {
     if (!window.supabaseClient || !email) return;
     try {
-      const redirectUrl = window.location.origin + window.location.pathname;
-      await window.supabaseClient.auth.resend({
-        type: "signup",
-        email: email,
-        options: { emailRedirectTo: redirectUrl }
-      });
-      showToast("📩 Письмо отправлено повторно!");
-    } catch (e) {}
-  },
-
-  async signIn(email, password) {
-    const cleanEmail = email.toLowerCase().trim();
-    if (!window.supabaseClient) {
-      showToast("Вставь ключи Supabase в js/auth.js");
-      return false;
-    }
-
-    try {
-      const { data, error } = await window.supabaseClient.auth.signInWithPassword({
-        email: cleanEmail,
-        password: password
-      });
-
-      if (error) {
-        if (error.message.toLowerCase().includes("not confirmed")) {
-          showToast("Сначала подтверди почту по ссылке в письме!");
-        } else {
-          showToast("Неверный Email или пароль");
-        }
-        return false;
-      }
-
-      if (data && data.user) {
-        GaplessDB.clearLocalStatus();
-        
-        // Сразу фиксируем авторизацию локально для мгновенного переключения экрана
-        AppState.data.isAuthenticated = true;
-        AppState.data.userEmail = data.user.email;
-        AppState.data.userName = data.user.user_metadata?.username || data.user.email.split("@")[0];
-        AppState.save();
-
-        // Синхронизируем профиль с базой в фоне
-        await this.syncProfileFromSession(data.user);
-        
-        showToast("✓ Вход выполнен!");
-
-        if (window.renderCurrentModule) {
-          window.renderCurrentModule();
-        } else {
-          window.location.reload();
-        }
-        return true;
-      }
-    } catch (e) {
-      showToast("Ошибка соединения");
-    }
-    return false;
-  },
-
-  async signOut() {
-    if (window.supabaseClient) {
-      try { await window.supabaseClient.auth.signOut(); } catch (e) {}
-    }
-    this.currentUserId = null;
-    GaplessDB.clearLocalStatus();
-    AppState.data.isAuthenticated = false;
-    AppState.data.onboardingCompleted = false;
-    AppState.data.userName = "";
-    AppState.data.userEmail = "";
-    AppState.data.activeTab = "today";
-    AppState.save();
-    showToast("Вы вышли из аккаунта");
-    if (window.renderCurrentModule) window.renderCurrentModule();
-  }
-};
-
-AuthModule.initAuthListener();
+      const redirectUrl = window.location.origin +
