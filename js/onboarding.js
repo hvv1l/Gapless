@@ -1,5 +1,6 @@
 // ============================================================================
 // ФАЙЛ: js/onboarding.js
+// Калибровка пробелов с живым поиском по 2040 словам, транскрипцией и темами
 // ============================================================================
 
 const ONBOARDING_I18N = {
@@ -18,11 +19,16 @@ const ONBOARDING_I18N = {
     selectedBadge: "Основной",
     toStep3Btn: (neighbors) => `Перейти к отсеву слов (${neighbors}) →`,
     step3Title: "Отметь то, что уже знаешь",
-    step3Desc: "Нажми «Знаю всё» на знакомой группе. Если внутри есть 1–2 забытых слова — просто нажми на них, чтобы отправить их в свои пробелы на изучение.",
-    allTopics: "Все темы",
+    step3Desc: "Нажми «Знаю всё» на знакомой группе или воспользуйся поиском. Забытые слова внутри группы можно нажать отдельно.",
+    searchPlaceholder: "🔍 Поиск слова (EN, RU, UA)...",
+    clearSearch: "Сбросить",
+    emptySearch: "По этому запросу слов не найдено",
+    markCategoryBtn: "✓ Знаю всю выбранную тему",
+    allTopics: "Все 20 тем",
     modeGroups: "Группы",
     modeSingle: "По одному",
     translationBtn: "Перевод",
+    transcriptionBtn: "[/tr/]",
     knowAll: "Знаю всё",
     knowAllActive: "✓ Знаю всё",
     knowWord: "✓ Знаю",
@@ -32,6 +38,7 @@ const ONBOARDING_I18N = {
     toStep4Btn: (n) => `Собрать программу (${n} на изучение) →`,
     toastClusterKnown: "Группа отмечена как известная",
     toastClusterGap: "Группа возвращена на изучение",
+    toastCategoryUpdated: "Статус темы обновлен!",
     step4Badge: "Калибровка завершена",
     step4Title: "Твой план готов!",
     statLevel: "Ориентир",
@@ -67,11 +74,16 @@ const ONBOARDING_I18N = {
     selectedBadge: "Основний",
     toStep3Btn: (neighbors) => `Перейти до відсіву слів (${neighbors}) →`,
     step3Title: "Відміть те, що вже знаєш",
-    step3Desc: "Натисни «Знаю все» на знайомій групі. Якщо всередині є 1–2 забутих слова — просто натисни на них, щоб відправити їх у свої прогалини на вивчення.",
-    allTopics: "Усі теми",
+    step3Desc: "Натисни «Знаю все» на знайомій групі або скористайся пошуком. Забуті слова всередині групи можна натиснути окремо.",
+    searchPlaceholder: "🔍 Пошук слова (EN, UA, RU)...",
+    clearSearch: "Скинути",
+    emptySearch: "За цим запитом слів не знайдено",
+    markCategoryBtn: "✓ Знаю всю обрану тему",
+    allTopics: "Усі 20 тем",
     modeGroups: "Групи",
     modeSingle: "По одному",
     translationBtn: "Переклад",
+    transcriptionBtn: "[/tr/]",
     knowAll: "Знаю все",
     knowAllActive: "✓ Знаю все",
     knowWord: "✓ Знаю",
@@ -81,6 +93,7 @@ const ONBOARDING_I18N = {
     toStep4Btn: (n) => `Зібрати програму (${n} на вивчення) →`,
     toastClusterKnown: "Групу відмічено як відому",
     toastClusterGap: "Групу повернуто на вивчення",
+    toastCategoryUpdated: "Статус теми оновлено!",
     step4Badge: "Калібрування завершено",
     step4Title: "Твій план готовий!",
     statLevel: "Орієнтир",
@@ -104,6 +117,8 @@ const ONBOARDING_I18N = {
 };
 
 const OnboardingModule = {
+  searchQuery: "",
+
   t() {
     const lang = AppState.data.nativeLang === "uk" ? "uk" : "ru";
     return ONBOARDING_I18N[lang];
@@ -140,8 +155,30 @@ const OnboardingModule = {
     this.render();
   },
 
+  handleSearchInput(value) {
+    this.searchQuery = value;
+    this.render();
+    const input = document.getElementById("onb-search-input");
+    if (input) {
+      input.focus();
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+    }
+  },
+
+  clearSearch() {
+    this.searchQuery = "";
+    this.render();
+  },
+
   toggleTranslation() {
     AppState.data.showTranslation = !AppState.data.showTranslation;
+    AppState.save();
+    this.render();
+  },
+
+  toggleTranscription() {
+    AppState.data.showTranscription = !AppState.data.showTranscription;
     AppState.save();
     this.render();
   },
@@ -153,12 +190,31 @@ const OnboardingModule = {
     this.render();
   },
 
+  // Отметить всю выбранную категорию как известную (или вернуть на изучение)
+  toggleVisibleClusters() {
+    const selectedLvl = AppState.data.selectedLevel || "B1";
+    const catFilter = AppState.data.categoryFilter || "all";
+    const clusters = GaplessDB.getClustersForCalibration(selectedLvl, catFilter);
+    if (!clusters.length) return;
+
+    const allKnown = clusters.every(c => c.words.every(w => GaplessDB.getWordStatus(w.en) === "known"));
+    const targetStatus = allKnown ? "gap" : "known";
+
+    clusters.forEach(c => {
+      c.words.forEach(w => {
+        GaplessDB.userWordStatus[w.en.toLowerCase()] = targetStatus;
+      });
+    });
+    GaplessDB._saveUserProgress();
+    showToast(this.t().toastCategoryUpdated);
+    this.render();
+  },
+
   handleWordToggle(wordEn) {
     GaplessDB.toggleWordStatus(wordEn);
     this.render();
   },
 
-  // Асинхронное сохранение с гарантией записи в Supabase
   async finishOnboarding() {
     const nameInput = document.getElementById("onb-name-input");
     const emailInput = document.getElementById("onb-email-input");
@@ -192,7 +248,6 @@ const OnboardingModule = {
     const container = document.getElementById("app-root");
     if (!container) return;
 
-    // Надежная страховка шага: если значение сбилось, всегда ставим Шаг 1
     const step = [1, 2, 3, 4].includes(AppState.data.onboardingStep) ? AppState.data.onboardingStep : 1;
     AppState.data.onboardingStep = step;
 
@@ -214,6 +269,9 @@ const OnboardingModule = {
       </div>
     `;
 
+    // ========================================================================
+    // ШАГ 1: ЯЗЫК И ТЕМА
+    // ========================================================================
     if (step === 1) {
       container.innerHTML = `
         ${stepsHeaderHtml}
@@ -267,6 +325,9 @@ const OnboardingModule = {
       return;
     }
 
+    // ========================================================================
+    // ШАГ 2: ВЫБОР УРОВНЯ С ЗАХВАТОМ СОСЕДНИХ
+    // ========================================================================
     if (step === 2) {
       const selectedLvl = AppState.data.selectedLevel || "B1";
       const neighbors = GaplessDB.getTargetAndNeighborLevels(selectedLvl);
@@ -318,46 +379,79 @@ const OnboardingModule = {
       return;
     }
 
+    // ========================================================================
+    // ШАГ 3: КАЛИБРОВКА СЛОВ (ПОИСК + ТРАНСКРИПЦИЯ + 20 ТЕМ)
+    // ========================================================================
     if (step === 3) {
       const selectedLvl = AppState.data.selectedLevel || "B1";
       const catFilter = AppState.data.categoryFilter || "all";
-      const clusters = GaplessDB.getClustersForCalibration(selectedLvl, catFilter);
+      const rawClusters = GaplessDB.getClustersForCalibration(selectedLvl, catFilter);
       const stats = GaplessDB.getStatistics(selectedLvl);
       const neighbors = GaplessDB.getTargetAndNeighborLevels(selectedLvl);
       const showTr = !!AppState.data.showTranslation;
+      const showPhonetics = !!AppState.data.showTranscription;
+      const query = this.searchQuery.trim().toLowerCase();
 
+      // Фильтрация по поисковому запросу (ищет по EN, RU и UA)
+      const wordMatchesQuery = (w) => {
+        if (!query) return true;
+        return (
+          w.en.toLowerCase().includes(query) ||
+          (w.ru && w.ru.toLowerCase().includes(query)) ||
+          (w.uk && w.uk.toLowerCase().includes(query))
+        );
+      };
+
+      const clusters = rawClusters
+        .map(c => ({
+          ...c,
+          titleFormatted: c.getTitle(lang),
+          filteredWords: c.words.filter(wordMatchesQuery)
+        }))
+        .filter(c => c.filteredWords.length > 0);
+
+      // Горизонтальная лента 20 категорий
       const categoryTabsHtml = `
-        <div class="flex flex-wrap gap-1.5 mb-3">
+        <div class="flex overflow-x-auto no-scrollbar gap-1.5 pb-1.5 mb-2.5">
           <button onclick="OnboardingModule.setCategoryFilter('all')"
-            class="px-3 py-1.5 rounded-xl text-xs font-bold transition ${catFilter === 'all' ? 'bg-ocean-600 text-white shadow-sm' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-ocean-500/50'}">
+            class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition ${catFilter === 'all' ? 'bg-ocean-600 text-white shadow-sm' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-ocean-500/50'}">
             ${i18n.allTopics}
           </button>
           ${GAPLESS_RAW_DB.categories.map(cat => `
             <button onclick="OnboardingModule.setCategoryFilter('${cat.id}')"
-              class="px-3 py-1.5 rounded-xl text-xs font-bold transition ${catFilter === cat.id ? 'bg-ocean-600 text-white shadow-sm' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-ocean-500/50'}">
-              ${lang === 'uk' ? cat.titleUk : cat.titleRu}
+              class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 ${catFilter === cat.id ? 'bg-ocean-600 text-white shadow-sm' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-ocean-500/50'}">
+              <span>${cat.icon || ''}</span>
+              <span>${lang === 'uk' ? cat.titleUk : cat.titleRu}</span>
             </button>
           `).join("")}
         </div>
       `;
 
       let listHtml = "";
-      if (AppState.data.filterMode === "clusters") {
+      if (clusters.length === 0) {
+        listHtml = `
+          <div class="p-8 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-2">
+            <div class="text-2xl">🔎</div>
+            <div class="text-xs font-bold text-slate-500">${i18n.emptySearch}</div>
+          </div>
+        `;
+      } else if (AppState.data.filterMode === "clusters") {
         listHtml = clusters.map(cluster => {
-          const knownCount = cluster.words.filter(w => GaplessDB.getWordStatus(w.en) === "known").length;
-          const allKnown = knownCount === cluster.words.length;
+          const knownCount = cluster.filteredWords.filter(w => GaplessDB.getWordStatus(w.en) === "known").length;
+          const allKnown = knownCount === cluster.filteredWords.length;
 
-          const wordsPills = cluster.words.map(word => {
+          const wordsPills = cluster.filteredWords.map(word => {
             const isKnown = GaplessDB.getWordStatus(word.en) === "known";
             return `
-              <button onclick="OnboardingModule.handleWordToggle('${word.en}')"
-                class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 ${
+              <button onclick="OnboardingModule.handleWordToggle('${word.en.replace(/'/g, "\\'")}')"
+                class="px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition flex flex-wrap items-center gap-1 ${
                   isKnown
                     ? 'bg-mint-500/15 border-mint-500/40 text-mint-700 dark:text-mint-300'
                     : 'bg-gap-500/15 border-gap-500/40 text-gap-600 dark:text-gap-300 shadow-sm'
                 }">
                 <span>${isKnown ? '✓' : '+'} ${word.en}</span>
-                ${showTr ? `<span class="text-[11px] opacity-70 font-normal border-l border-current/20 pl-1.5">${word.getTranslation(lang)}</span>` : ''}
+                ${showPhonetics && word.tr ? `<span class="text-[10px] opacity-65 font-mono">${word.tr}</span>` : ''}
+                ${showTr ? `<span class="text-[11px] opacity-75 font-normal border-l border-current/20 pl-1.5">${word.getTranslation(lang)}</span>` : ''}
               </button>
             `;
           }).join("");
@@ -370,13 +464,14 @@ const OnboardingModule = {
             }">
               <div class="flex items-center justify-between gap-2 mb-2.5">
                 <div class="flex items-center gap-2">
-                  <span class="font-bold text-sm">${cluster.getTitle(lang)}</span>
+                  <span>${cluster.icon || ''}</span>
+                  <span class="font-bold text-sm">${cluster.titleFormatted}</span>
                   <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-md ${
                     cluster.level === selectedLvl ? 'bg-ocean-500 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
                   }">${cluster.level}</span>
                 </div>
                 <button onclick="OnboardingModule.handleClusterToggle('${cluster.clusterId}')"
-                  class="px-3 py-1 rounded-xl text-xs font-bold transition ${
+                  class="px-3 py-1 rounded-xl text-xs font-bold transition shrink-0 ${
                     allKnown
                       ? 'bg-mint-500 text-white shadow-sm'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-mint-500/20 hover:text-mint-500'
@@ -390,21 +485,21 @@ const OnboardingModule = {
         }).join("");
       } else {
         const flatWords = [];
-        clusters.forEach(c => c.words.forEach(w => flatWords.push(w)));
+        clusters.forEach(c => c.filteredWords.forEach(w => flatWords.push(w)));
         listHtml = `
           <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
             ${flatWords.map(word => {
               const isKnown = GaplessDB.getWordStatus(word.en) === "known";
               return `
-                <div onclick="OnboardingModule.handleWordToggle('${word.en}')" class="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                <div onclick="OnboardingModule.handleWordToggle('${word.en.replace(/'/g, "\\'")}')" class="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
                   <div>
                     <div class="flex items-center gap-2">
-                      <span class="font-bold text-sm">${word.en}</span>
+                      <span class="font-bold text-sm">${word.en}</span>${(showPhonetics || AppState.data.filterMode === 'single') && word.tr ? `<span class="text-xs text-slate-400 font-mono">${word.tr}</span>` : ''}
                       <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold">${word.level}</span>
                     </div>
                     ${showTr ? `<div class="text-xs text-slate-500 mt-0.5">${word.getTranslation(lang)}</div>` : ''}
                   </div>
-                  <span class="px-3 py-1 rounded-xl text-xs font-bold ${isKnown ? 'bg-mint-500/15 text-mint-600 dark:text-mint-400' : 'bg-gap-500/15 text-gap-600 dark:text-gap-400'}">
+                  <span class="px-3 py-1 rounded-xl text-xs font-bold shrink-0 ${isKnown ? 'bg-mint-500/15 text-mint-600 dark:text-mint-400' : 'bg-gap-500/15 text-gap-600 dark:text-gap-400'}">
                     ${isKnown ? i18n.knowWord : i18n.learnWord}
                   </span>
                 </div>
@@ -426,9 +521,27 @@ const OnboardingModule = {
               ${i18n.step3Desc}
             </p>
 
+            <!-- ПОИСК ПО 2040 СЛОВАМ -->
+            <div class="relative mb-2.5">
+              <input
+                id="onb-search-input"
+                type="text"
+                value="${this.searchQuery.replace(/"/g, '&quot;')}"
+                oninput="OnboardingModule.handleSearchInput(this.value)"
+                placeholder="${i18n.searchPlaceholder}"
+                class="w-full pl-3.5 pr-20 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs outline-none focus:ring-2 focus:ring-ocean-500 shadow-sm"
+              />
+              ${this.searchQuery ? `
+                <button onclick="OnboardingModule.clearSearch()" class="absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white">
+                  ✕ ${i18n.clearSearch}
+                </button>
+              ` : ''}
+            </div>
+
             ${categoryTabsHtml}
 
-            <div class="flex items-center gap-2 mb-3">
+            <!-- ПЕРЕКЛЮЧАТЕЛИ РЕЖИМА, ТРАНСКРИПЦИИ И ПЕРЕВОДА -->
+            <div class="flex items-center gap-1.5 mb-3">
               <div class="flex-1 grid grid-cols-2 bg-slate-200/70 dark:bg-slate-900 p-1 rounded-xl text-xs font-bold border border-slate-200/60 dark:border-slate-800">
                 <button onclick="OnboardingModule.setFilterMode('clusters')" class="py-1.5 rounded-lg transition ${AppState.data.filterMode === 'clusters' ? 'bg-white dark:bg-slate-800 text-ocean-600 dark:text-ocean-400 shadow-sm' : 'text-slate-500'}">
                   ${i18n.modeGroups}
@@ -438,8 +551,17 @@ const OnboardingModule = {
                 </button>
               </div>
 
+              <button onclick="OnboardingModule.toggleTranscription()"
+                class="px-2.5 py-2 rounded-xl text-xs font-mono font-bold border transition ${
+                  showPhonetics
+                    ? 'bg-ocean-500/15 border-ocean-500 text-ocean-600 dark:text-ocean-400'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 hover:border-slate-300'
+                }" title="Транскрипция">
+                ${i18n.transcriptionBtn}
+              </button>
+
               <button onclick="OnboardingModule.toggleTranslation()"
-                class="px-3.5 py-2 rounded-xl text-xs font-bold border transition ${
+                class="px-3 py-2 rounded-xl text-xs font-bold border transition ${
                   showTr
                     ? 'bg-ocean-500/15 border-ocean-500 text-ocean-600 dark:text-ocean-400'
                     : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 hover:border-slate-300'
@@ -447,6 +569,12 @@ const OnboardingModule = {
                 ${i18n.translationBtn}
               </button>
             </div>
+
+            ${catFilter !== 'all' ? `
+              <button onclick="OnboardingModule.toggleVisibleClusters()" class="w-full mb-3 py-2 rounded-xl bg-mint-500/10 border border-mint-500/30 text-mint-600 dark:text-mint-400 text-xs font-bold hover:bg-mint-500/20 transition">
+                ${i18n.markCategoryBtn}
+              </button>
+            ` : ''}
 
             <div class="space-y-3">${listHtml}</div>
           </div>
@@ -465,6 +593,9 @@ const OnboardingModule = {
       return;
     }
 
+    // ========================================================================
+    // ШАГ 4: ИТОГИ КАЛИБРОВКИ
+    // ========================================================================
     if (step === 4) {
       const selectedLvl = AppState.data.selectedLevel || "B1";
       const stats = GaplessDB.getStatistics(selectedLvl);
@@ -498,10 +629,10 @@ const OnboardingModule = {
                 <span class="text-xs font-bold uppercase tracking-wider text-slate-400">${i18n.firstDeckLabel}</span>
                 <span class="text-xs text-ocean-500 font-bold">${i18n.wordsCount(gapWords.length)}</span>
               </div>
-              <div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                ${gapWords.slice(0, 18).map(w => `
+              <div class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                ${gapWords.slice(0, 24).map(w => `
                   <span class="px-2.5 py-1 rounded-lg bg-gap-500/10 text-gap-600 dark:text-gap-400 text-xs font-semibold">
-                    ${w.en} <span class="opacity-60 font-normal">— ${w.getTranslation(lang)}</span>
+                    ${w.en}${w.tr ? `<span class="opacity-50 font-mono text-[10px]">${w.tr}</span>` : ''} <span class="opacity-60 font-normal">— ${w.getTranslation(lang)}</span>
                   </span>
                 `).join("")}
               </div>
