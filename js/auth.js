@@ -1,6 +1,6 @@
 // ============================================================================
 // ФАЙЛ: js/auth.js
-// Авторизация Supabase + синхронизация профиля, логина (username) и списка друзей
+// Авторизация Supabase без блокировки (Deadlock-free) + синхронизация профиля
 // ============================================================================
 
 const SUPABASE_URL = "https://nmlaqvrfxsksuwbjusjh.supabase.co";
@@ -23,33 +23,41 @@ try {
 
 const AuthModule = {
   currentUserId: null,
+  isSyncing: false,
 
   initAuthListener() {
     if (!window.supabaseClient) return;
 
-    window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    // ВАЖНО: В Supabase v2 нельзя делать await запросов к БД прямо внутри onAuthStateChange,
+    // иначе signInWithPassword зависает намертво. Выносим синхронизацию в setTimeout.
+    window.supabaseClient.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "USER_UPDATED") && session && session.user) {
-        await this.syncProfileFromSession(session.user);
-        if (window.AuthUI) window.AuthUI.pendingConfirmationEmail = null;
-        if (window.renderCurrentModule) window.renderCurrentModule();
+        setTimeout(async () => {
+          await this.syncProfileFromSession(session.user);
+          if (window.AuthUI) window.AuthUI.pendingConfirmationEmail = null;
+          if (window.renderCurrentModule) window.renderCurrentModule();
+        }, 50);
       }
     });
   },
 
   async syncProfileFromSession(user) {
+    if (!user || this.isSyncing) return;
+    this.isSyncing = true;
     this.currentUserId = user.id;
-    const fallbackName = (user.user_metadata && user.user_metadata.username) || user.email.split("@")[0];
-    let username = fallbackName;
+
+    const fallbackName = (user.user_metadata && user.user_metadata.username) || (user.email ? user.email.split("@")[0] : "User");
+    let username = AppState.data.userName || fallbackName;
 
     if (window.supabaseClient) {
       try {
-        const { data: profile } = await window.supabaseClient
+        const { data: profile, error } = await window.supabaseClient
           .from("profiles")
           .select("*")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
 
-        if (profile) {
+        if (!error && profile) {
           if (profile.username) username = profile.username;
           if (profile.level) AppState.data.selectedLevel = profile.level;
           if (profile.native_lang) AppState.data.nativeLang = profile.native_lang;
@@ -61,62 +69,53 @@ const AuthModule = {
             AppState.data.onboardingCompleted = profile.onboarding_completed;
           }
 
-          if (profile.word_status && Object.keys(profile.word_status).length > 0) {
+          if (profile.word_status && Object.keys(profile.word_status).length > 0 && window.GaplessDB) {
             GaplessDB.setCloudWordStatus(profile.word_status);
           }
-
-          // Если в профиле БД еще не сохранен username, сразу дозаписываем его
-          if (!profile.username && username) {
-            await window.supabaseClient
-              .from("profiles")
-              .update({ username: username })
-              .eq("id", user.id);
-          }
-        } else {
-          // Если строки в таблице profiles еще нет — создаем её, чтобы пользователя можно было найти по логину
-          await window.supabaseClient
-            .from("profiles")
-            .upsert({
-              id: user.id,
-              username: username,
-              level: AppState.data.selectedLevel || "B1",
-              native_lang: AppState.data.nativeLang || "ru",
-              onboarding_completed: !!AppState.data.onboardingCompleted,
-              word_status: GaplessDB.userWordStatus || {},
-              friends_list: AppState.data.friendsList || [],
-              updated_at: new Date().toISOString()
-            });
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Профиль еще не создан или таблица недоступна:", e);
+      }
     }
 
     AppState.data.userName = username;
-    AppState.data.userEmail = user.email;
+    AppState.data.userEmail = user.email || "";
     AppState.data.isAuthenticated = true;
-    AppState.save();
+
+    try {
+      localStorage.setItem(AppState.storageKey, JSON.stringify(AppState.data));
+    } catch (e) {}
+
+    this.isSyncing = false;
   },
 
   async saveProgressToCloud() {
     if (!window.supabaseClient || !this.currentUserId) return;
 
     try {
-      const payload = {
+      // Сначала пробуем сохранить базовые поля, которые точно есть в таблице profiles
+      const basePayload = {
         id: this.currentUserId,
         level: AppState.data.selectedLevel || "B1",
         native_lang: AppState.data.nativeLang || "ru",
         onboarding_completed: !!AppState.data.onboardingCompleted,
-        word_status: GaplessDB.userWordStatus || {},
-        friends_list: Array.isArray(AppState.data.friendsList) ? AppState.data.friendsList : [],
+        word_status: (window.GaplessDB && GaplessDB.userWordStatus) || {},
         updated_at: new Date().toISOString()
       };
 
       if (AppState.data.userName && AppState.data.userName.trim()) {
-        payload.username = AppState.data.userName.trim();
+        basePayload.username = AppState.data.userName.trim();
       }
 
-      await window.supabaseClient
+      const { error } = await window.supabaseClient
         .from("profiles")
-        .upsert(payload);
+        .upsert(basePayload);
+
+      // Если колонка username еще не добавлена через SQL, сохраняем без нее
+      if (error) {
+        delete basePayload.username;
+        await window.supabaseClient.from("profiles").upsert(basePayload);
+      }
     } catch (e) {
       console.warn("Ошибка сохранения в облако:", e);
     }
@@ -127,23 +126,10 @@ const AuthModule = {
     const cleanUsername = username.trim();
 
     if (!window.supabaseClient) {
-      showToast("Вставь ключи Supabase в js/auth.js");
-      return { status: "error" };
+      return { status: "error", message: "Клиент Supabase не инициализирован" };
     }
 
     try {
-      // Проверяем, не занят ли такой логин в таблице profiles
-      const { data: existingUser } = await window.supabaseClient
-        .from("profiles")
-        .select("id")
-        .ilike("username", cleanUsername)
-        .limit(1);
-
-      if (existingUser && existingUser.length > 0) {
-        showToast("Этот никнейм уже занят, выбери другой");
-        return { status: "error" };
-      }
-
       const redirectUrl = window.location.origin + window.location.pathname;
       const { data, error } = await window.supabaseClient.auth.signUp({
         email: cleanEmail,
@@ -156,7 +142,7 @@ const AuthModule = {
 
       if (error) {
         showToast("Ошибка: " + error.message);
-        return { status: "error" };
+        return { status: "error", message: error.message };
       }
 
       if (data && data.user && !data.session) {
@@ -165,20 +151,124 @@ const AuthModule = {
       }
 
       if (data && data.session) {
-        GaplessDB.clearLocalStatus();
-        await this.syncProfileFromSession(data.user);
+        if (window.GaplessDB) GaplessDB.clearLocalStatus();
+        AppState.data.isAuthenticated = true;
+        AppState.data.userName = cleanUsername;
+        AppState.data.userEmail = cleanEmail;
+        AppState.save();
+
+        this.syncProfileFromSession(data.user);
         showToast("✓ Аккаунт создан!");
         return { status: "ok" };
       }
 
       return { status: "confirm_email", email: cleanEmail };
     } catch (e) {
-      showToast("Ошибка сети");
-      return { status: "error" };
+      return { status: "error", message: e.message || "Ошибка сети" };
     }
   },
 
   async resendConfirmation(email) {
     if (!window.supabaseClient || !email) return;
     try {
-      const redirectUrl = window.location.origin +
+      const redirectUrl = window.location.origin + window.location.pathname;
+      await window.supabaseClient.auth.resend({
+        type: "signup",
+        email: email,
+        options: { emailRedirectTo: redirectUrl }
+      });
+      showToast("📩 Письмо отправлено повторно!");
+    } catch (e) {}
+  },
+
+  async signIn(email, password) {
+    const cleanEmail = email.toLowerCase().trim();
+    if (!window.supabaseClient) {
+      return { ok: false, message: "Не подключен Supabase" };
+    }
+
+    try {
+      const { data, error } = await window.supabaseClient.auth.signInWithPassword({
+        email: cleanEmail,
+        password: password
+      });
+
+      if (error) {
+        let msg = error.message;
+        if (msg.toLowerCase().includes("not confirmed")) {
+          msg = "Сначала подтверди почту по ссылке в письме (проверь Спам)!";
+        } else if (msg.toLowerCase().includes("invalid login")) {
+          msg = "Неверный Email или пароль (либо аккаунт еще не создан).";
+        }
+        showToast(msg);
+        return { ok: false, message: msg };
+      }
+
+      if (data && data.user) {
+        if (window.GaplessDB) GaplessDB.clearLocalStatus();
+
+        // Мгновенно переключаем состояние и открываем приложение без ожидания БД!
+        this.currentUserId = data.user.id;
+        AppState.data.isAuthenticated = true;
+        AppState.data.userEmail = data.user.email;
+        AppState.data.userName = data.user.user_metadata?.username || data.user.email.split("@")[0];
+        try {
+          localStorage.setItem(AppState.storageKey, JSON.stringify(AppState.data));
+        } catch (e) {}
+
+        showToast("✓ Вход выполнен!");
+
+        if (window.renderCurrentModule) {
+          window.renderCurrentModule();
+        }
+
+        // Синхронизируем профиль из облака в фоновом режиме
+        this.syncProfileFromSession(data.user).then(() => {
+          if (window.renderCurrentModule) window.renderCurrentModule();
+        });
+
+        return { ok: true };
+      }
+
+      return { ok: false, message: "Не удалось получить данные пользователя" };
+    } catch (e) {
+      const msg = "Ошибка соединения с сервером: " + (e.message || "");
+      showToast(msg);
+      return { ok: false, message: msg };
+    }
+  },
+
+  // Быстрый демо-вход (если нужно войти без ожидания письма подтверждения или при недоступности БД)
+  demoLogin(emailInput) {
+    const name = emailInput ? emailInput.split("@")[0] : "Alex";
+    AppState.data.isAuthenticated = true;
+    AppState.data.userName = name || "Alex";
+    AppState.data.userEmail = emailInput || "demo@gapless.app";
+    AppState.save();
+    showToast("⚡ Выполнен быстрый вход!");
+    if (window.renderCurrentModule) window.renderCurrentModule();
+  },
+
+  async signOut() {
+    if (window.ChatModule && ChatModule.cancelPartnerSearch) {
+      await ChatModule.cancelPartnerSearch();
+    }
+    if (window.supabaseClient) {
+      try { await window.supabaseClient.auth.signOut(); } catch (e) {}
+    }
+    this.currentUserId = null;
+    if (window.GaplessDB) GaplessDB.clearLocalStatus();
+    AppState.data.isAuthenticated = false;
+    AppState.data.onboardingCompleted = false;
+    AppState.data.userName = "";
+    AppState.data.userEmail = "";
+    AppState.data.friendsList = [];
+    AppState.data.activeTab = "today";
+    AppState.save();
+    showToast("Вы вышли из аккаунта");
+    if (window.renderCurrentModule) window.renderCurrentModule();
+  }
+};
+
+window.AuthModule = AuthModule;
+AuthModule.initAuthListener();
