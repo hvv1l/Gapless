@@ -1,16 +1,19 @@
 // ============================================================================
 // ФАЙЛ: js/auth-ui.js
-// Экран Входа, Регистрации и Ожидания подтверждения почты
+// Экран Входа, Регистрации и Ожидания подтверждения почты (с защитой от зависаний)
 // ============================================================================
 
 const AuthUI = {
   isRegisterMode: true,
   isSubmitting: false,
-  pendingConfirmationEmail: null, // Если ждет подтверждения письма
+  pendingConfirmationEmail: null,
+  lastErrorMessage: "",
 
   toggleMode() {
     this.isRegisterMode = !this.isRegisterMode;
     this.pendingConfirmationEmail = null;
+    this.lastErrorMessage = "";
+    this.isSubmitting = false;
     this.renderAuthScreen();
   },
 
@@ -21,51 +24,97 @@ const AuthUI = {
     const emailEl = document.getElementById("auth-email");
     const passEl = document.getElementById("auth-pass");
     const userEl = document.getElementById("auth-username");
+    const submitBtn = document.getElementById("auth-submit-btn");
 
     const email = emailEl ? emailEl.value.trim() : "";
     const password = passEl ? passEl.value.trim() : "";
     const username = userEl ? userEl.value.trim() : "";
 
+    this.lastErrorMessage = "";
+
     if (!email || !password) {
-      showToast("Введи Email и пароль");
+      this.lastErrorMessage = "Введи Email и пароль";
+      showToast(this.lastErrorMessage);
+      this.renderErrorBox();
       return;
     }
 
     if (password.length < 6) {
-      showToast("Пароль должен быть не менее 6 символов");
+      this.lastErrorMessage = "Пароль должен быть не менее 6 символов";
+      showToast(this.lastErrorMessage);
+      this.renderErrorBox();
       return;
     }
 
     if (this.isRegisterMode && !username) {
-      showToast("Введи свой никнейм");
+      this.lastErrorMessage = "Введи свой никнейм";
+      showToast(this.lastErrorMessage);
+      this.renderErrorBox();
       return;
     }
 
     this.isSubmitting = true;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "⏳ Подожди...";
+    }
 
-    if (this.isRegisterMode) {
-      const result = await AuthModule.signUp(email, password, username);
+    try {
+      if (this.isRegisterMode) {
+        const result = await AuthModule.signUp(email, password, username);
+
+        if (result.status === "confirm_email") {
+          this.pendingConfirmationEmail = result.email;
+          this.renderAuthScreen();
+          return;
+        }
+        if (result.status === "ok") {
+          AppState.data.activeTab = "today";
+          AppState.save();
+          if (window.renderCurrentModule) window.renderCurrentModule();
+          return;
+        }
+        if (result.message) {
+          this.lastErrorMessage = result.message;
+          this.renderErrorBox();
+        }
+      } else {
+        const result = await AuthModule.signIn(email, password);
+
+        if (result && result.ok) {
+          AppState.data.activeTab = "today";
+          AppState.save();
+          if (window.renderCurrentModule) window.renderCurrentModule();
+          return;
+        } else {
+          this.lastErrorMessage = (result && result.message) || "Не удалось войти. Проверь Email и пароль.";
+          this.renderErrorBox();
+        }
+      }
+    } catch (err) {
+      this.lastErrorMessage = err.message || "Неизвестная ошибка при входе";
+      this.renderErrorBox();
+    } finally {
       this.isSubmitting = false;
+      if (submitBtn) {
+        const isUk = AppState.data.nativeLang === "uk";
+        submitBtn.disabled = false;
+        submitBtn.textContent = this.isRegisterMode
+          ? (isUk ? "Зареєструватися →" : "Зарегистрироваться →")
+          : (isUk ? "Увійти →" : "Войти →");
+      }
+    }
+  },
 
-      if (result.status === "confirm_email") {
-        this.pendingConfirmationEmail = result.email;
-        this.renderAuthScreen();
-        return;
-      }
-      if (result.status === "ok") {
-        AppState.data.activeTab = "today";
-        AppState.save();
-        if (window.renderCurrentModule) window.renderCurrentModule();
-      }
+  renderErrorBox() {
+    const errBox = document.getElementById("auth-error-box");
+    if (!errBox) return;
+    if (!this.lastErrorMessage) {
+      errBox.classList.add("hidden");
+      errBox.textContent = "";
     } else {
-      const ok = await AuthModule.signIn(email, password);
-      this.isSubmitting = false;
-
-      if (ok) {
-        AppState.data.activeTab = "today";
-        AppState.save();
-        if (window.renderCurrentModule) window.renderCurrentModule();
-      }
+      errBox.classList.remove("hidden");
+      errBox.textContent = "⚠️ " + this.lastErrorMessage;
     }
   },
 
@@ -74,7 +123,6 @@ const AuthUI = {
     if (!container) return;
     const isUk = AppState.data.nativeLang === "uk";
 
-    // ЭКРАН ОЖИДАНИЯ ПОДТВЕРЖДЕНИЯ ПОЧТЫ
     if (this.pendingConfirmationEmail) {
       container.innerHTML = `
         <div class="p-6 my-auto flex-1 flex flex-col justify-center max-w-sm mx-auto w-full fade-in space-y-5 text-center">
@@ -101,6 +149,10 @@ const AuthUI = {
               class="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs hover:opacity-80 transition">
               ${isUk ? 'Надіслати лист ще раз' : 'Отправить письмо еще раз'}
             </button>
+            <button onclick="AuthModule.demoLogin('${this.pendingConfirmationEmail}')"
+              class="w-full py-2.5 rounded-xl bg-mint-500/15 text-mint-600 dark:text-mint-400 font-bold text-xs hover:opacity-80 transition">
+              ⚡ ${isUk ? 'Пропустити підтвердження (Демо-вхід)' : 'Пропустить подтверждение (Быстрый вход)'}
+            </button>
           </div>
 
           <button onclick="AuthUI.pendingConfirmationEmail = null; AuthUI.renderAuthScreen();"
@@ -112,7 +164,6 @@ const AuthUI = {
       return;
     }
 
-    // ОСНОВНОЙ ЭКРАН РЕГИСТРАЦИИ / ВХОДА
     container.innerHTML = `
       <div class="p-6 my-auto flex-1 flex flex-col justify-center max-w-sm mx-auto w-full fade-in space-y-5">
         <div class="text-center space-y-2">
@@ -130,6 +181,8 @@ const AuthUI = {
         </div>
 
         <form onsubmit="AuthUI.handleAuthSubmit(event)" class="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3.5 shadow-sm">
+          <div id="auth-error-box" class="hidden p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-semibold"></div>
+
           ${this.isRegisterMode ? `
             <div>
               <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">${isUk ? 'Твій нікнейм' : 'Твой никнейм'}</label>
@@ -150,9 +203,14 @@ const AuthUI = {
               class="w-full px-3.5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-ocean-500" />
           </div>
 
-          <button type="submit"
+          <button id="auth-submit-btn" type="submit"
             class="w-full py-3.5 rounded-xl bg-gradient-to-r from-ocean-600 to-mint-600 hover:from-ocean-500 hover:to-mint-500 active:scale-[0.99] text-white font-bold text-sm shadow-md transition">
             ${this.isRegisterMode ? (isUk ? 'Зареєструватися →' : 'Зарегистрироваться →') : (isUk ? 'Увійти →' : 'Войти →')}
+          </button>
+
+          <button type="button" onclick="AuthModule.demoLogin(document.getElementById('auth-email')?.value)"
+            class="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-ocean-500 font-bold text-xs transition">
+            ⚡ ${isUk ? 'Швидкий вхід (тестовий режим без пошти)' : 'Быстрый вход (тестовый режим без почты)'}
           </button>
         </form>
 
@@ -165,3 +223,5 @@ const AuthUI = {
     `;
   }
 };
+
+window.AuthUI = AuthUI;
