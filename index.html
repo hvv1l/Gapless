@@ -21,7 +21,7 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=802" />
+  <link rel="stylesheet" href="style.css?v=805" />
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center transition-colors duration-300">
 
@@ -57,21 +57,32 @@
     <div id="app-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-300 bg-slate-900/95 dark:bg-white/95 text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-semibold shadow-xl"></div>
   </div>
 
-  <!-- ПОДКЛЮЧЕНИЕ МОДУЛЕЙ БАЗЫ ДАННЫХ И ЛОГИКИ -->
-  <script src="data/vocabulary.js?v=802"></script>
-  <script src="data/rules.js?v=802"></script>
-  <script src="js/db-service.js?v=802"></script>
-  <script src="js/state.js?v=802"></script>
-  <script src="js/auth.js?v=802"></script>
-  <script src="js/auth-ui.js?v=802"></script>
-  <script src="js/onboarding.js?v=802"></script>
-  <script src="js/dashboard.js?v=802"></script>
-  <script src="js/chat.js?v=802"></script>
+  <!-- ПОДКЛЮЧЕНИЕ МОДУЛЕЙ -->
+  <script src="data/vocabulary.js?v=805"></script>
+  <script src="data/rules.js?v=805"></script>
+  <script src="js/db-service.js?v=805"></script>
+  <script src="js/state.js?v=805"></script>
+  <script src="js/auth.js?v=805"></script>
+  <script src="js/auth-ui.js?v=805"></script>
+  <script src="js/onboarding.js?v=805"></script>
+  <script src="js/dashboard.js?v=805"></script>
+  <script src="js/chat.js?v=805"></script>
 
   <script>
-    // Привязываем все модули к глобальному объекту window, чтобы они видели друг друга из любых файлов
+    // Резервная защита, если файл data/rules.js еще не загружен в папку data/
+    if (typeof window.GaplessRulesDB === "undefined" && typeof GaplessRulesDB === "undefined") {
+      window.GaplessRulesDB = {
+        rules: [],
+        videos: [],
+        getRulesForLevel() { return []; },
+        getDailyRules() { return []; },
+        getVideosForLevel() { return []; }
+      };
+    } else if (typeof GaplessRulesDB !== "undefined") {
+      window.GaplessRulesDB = GaplessRulesDB;
+    }
+
     if (typeof GaplessDB !== "undefined") window.GaplessDB = GaplessDB;
-    if (typeof GaplessRulesDB !== "undefined") window.GaplessRulesDB = GaplessRulesDB;
     if (typeof AppState !== "undefined") window.AppState = AppState;
     if (typeof AuthModule !== "undefined") window.AuthModule = AuthModule;
     if (typeof AuthUI !== "undefined") window.AuthUI = AuthUI;
@@ -121,7 +132,6 @@
         else logoutBtn.classList.add("hidden");
       }
 
-      // Скрываем нижнюю панель навигации, если не вошел ИЛИ еще проходит калибровку
       if (!AppState.data.isAuthenticated || !AppState.data.onboardingCompleted) {
         if (nav) nav.classList.add("hidden");
         return;
@@ -146,18 +156,78 @@
     }
 
     function renderCurrentModule() {
+      const rootContainer = document.getElementById("app-root");
       try {
-        updateNavigationBars();
+        if (typeof AppState === "undefined" || typeof GaplessDB === "undefined") {
+          throw new Error("Не загружена база слов (проверь файл data/vocabulary.js и js/db-service.js)");
+        }
 
-        const rootContainer = document.getElementById("app-root");
+        updateNavigationBars();
         if (rootContainer) rootContainer.innerHTML = "";
 
-        // 1. Экран авторизации
         if (!AppState.data.isAuthenticated) {
           AuthUI.renderAuthScreen();
           return;
         }
 
-        // 2. Экран калибровки (онбординга) после регистрации
         if (!AppState.data.onboardingCompleted) {
-          if (![1, 2, 3, 4].includes
+          if (![1, 2, 3, 4].includes(AppState.data.onboardingStep)) {
+            AppState.data.onboardingStep = 1;
+          }
+          OnboardingModule.render();
+          return;
+        }
+
+        const tab = AppState.data.activeTab || "today";
+        if (tab === "chat") {
+          ChatModule.render();
+        } else {
+          DashboardModule.render();
+        }
+      } catch (err) {
+        console.error("Ошибка рендера:", err);
+        if (rootContainer) {
+          rootContainer.innerHTML = `
+            <div class="p-6 my-auto text-center space-y-3">
+              <div class="text-3xl">⚠️</div>
+              <div class="text-sm font-extrabold text-red-400">Ошибка загрузки модуля</div>
+              <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 break-words">
+                ${err.message || err}
+              </div>
+              <button onclick="localStorage.clear(); location.reload();" class="px-4 py-2.5 rounded-xl bg-ocean-600 text-white text-xs font-bold">
+                Сбросить кэш и перезагрузить
+              </button>
+            </div>
+          `;
+        }
+      }
+    }
+
+    window.renderCurrentModule = renderCurrentModule;
+    window.switchAppTab = switchAppTab;
+    window.goHomeMenu = goHomeMenu;
+    window.updateNavigationBars = updateNavigationBars;
+
+    async function bootstrapApp() {
+      if (typeof AppState !== "undefined") {
+        AppState.init();
+      }
+      // Сначала мгновенно рисуем интерфейс без ожидания сети
+      renderCurrentModule();
+
+      // Затем в фоне синхронизируем сессию Supabase
+      if (window.supabaseClient && typeof AuthModule !== "undefined") {
+        try {
+          const { data: { session } } = await window.supabaseClient.auth.getSession();
+          if (session && session.user) {
+            await AuthModule.syncProfileFromSession(session.user);
+            renderCurrentModule();
+          }
+        } catch (e) {}
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", bootstrapApp);
+  </script>
+</body>
+</html>
