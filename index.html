@@ -21,7 +21,7 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=800" />
+  <link rel="stylesheet" href="style.css?v=802" />
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex justify-center transition-colors duration-300">
 
@@ -57,19 +57,21 @@
     <div id="app-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-300 bg-slate-900/95 dark:bg-white/95 text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-semibold shadow-xl"></div>
   </div>
 
-  <!-- ПОДКЛЮЧЕНИЕ ОРИГИНАЛЬНЫХ МОДУЛЕЙ -->
-  <script src="data/vocabulary.js?v=800"></script>
-  <script src="js/db-service.js?v=800"></script>
-  <script src="js/state.js?v=800"></script>
-  <script src="js/auth.js?v=800"></script>
-  <script src="js/auth-ui.js?v=800"></script>
-  <script src="js/onboarding.js?v=800"></script>
-  <script src="js/dashboard.js?v=800"></script>
-  <script src="js/chat.js?v=800"></script>
+  <!-- ПОДКЛЮЧЕНИЕ МОДУЛЕЙ БАЗЫ ДАННЫХ И ЛОГИКИ -->
+  <script src="data/vocabulary.js?v=802"></script>
+  <script src="data/rules.js?v=802"></script>
+  <script src="js/db-service.js?v=802"></script>
+  <script src="js/state.js?v=802"></script>
+  <script src="js/auth.js?v=802"></script>
+  <script src="js/auth-ui.js?v=802"></script>
+  <script src="js/onboarding.js?v=802"></script>
+  <script src="js/dashboard.js?v=802"></script>
+  <script src="js/chat.js?v=802"></script>
 
   <script>
     // Привязываем все модули к глобальному объекту window, чтобы они видели друг друга из любых файлов
     if (typeof GaplessDB !== "undefined") window.GaplessDB = GaplessDB;
+    if (typeof GaplessRulesDB !== "undefined") window.GaplessRulesDB = GaplessRulesDB;
     if (typeof AppState !== "undefined") window.AppState = AppState;
     if (typeof AuthModule !== "undefined") window.AuthModule = AuthModule;
     if (typeof AuthUI !== "undefined") window.AuthUI = AuthUI;
@@ -89,6 +91,7 @@
       AppState.data.activeTab = "today";
       if (typeof DashboardModule !== "undefined") {
         DashboardModule.activeExercise = null;
+        DashboardModule.isDailyRoutine = false;
       }
       AppState.save();
       renderCurrentModule();
@@ -98,6 +101,7 @@
       AppState.data.activeTab = tabId;
       if (typeof DashboardModule !== "undefined" && tabId !== "exercises") {
         DashboardModule.activeExercise = null;
+        DashboardModule.isDailyRoutine = false;
       }
       if (tabId === "chat" && typeof ChatModule !== "undefined") {
         ChatModule.ensureConnected();
@@ -156,43 +160,4 @@
 
         // 2. Экран калибровки (онбординга) после регистрации
         if (!AppState.data.onboardingCompleted) {
-          if (![1, 2, 3, 4].includes(AppState.data.onboardingStep)) {
-            AppState.data.onboardingStep = 1;
-          }
-          OnboardingModule.render();
-          return;
-        }
-
-        // 3. Главные вкладки приложения
-        const tab = AppState.data.activeTab || "today";
-        if (tab === "chat") {
-          ChatModule.render();
-        } else {
-          DashboardModule.render();
-        }
-      } catch (err) {
-        console.error("Ошибка рендера:", err);
-      }
-    }
-
-    window.renderCurrentModule = renderCurrentModule;
-    window.switchAppTab = switchAppTab;
-    window.goHomeMenu = goHomeMenu;
-
-    async function bootstrapApp() {
-      AppState.init();
-      if (window.supabaseClient && typeof AuthModule !== "undefined") {
-        try {
-          const { data: { session } } = await window.supabaseClient.auth.getSession();
-          if (session && session.user) {
-            await AuthModule.syncProfileFromSession(session.user);
-          }
-        } catch (e) {}
-      }
-      renderCurrentModule();
-    }
-
-    window.addEventListener("DOMContentLoaded", bootstrapApp);
-  </script>
-</body>
-</html>
+          if (![1, 2, 3, 4].includes
